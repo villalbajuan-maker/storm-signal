@@ -61,3 +61,19 @@ Los 18 eventos no se borrarían: únicamente quedarían sin asociación geográf
 Tramos 1, 2, 3 y 4 están completos. El tramo 3 generó una instantánea lógica completa de los datos públicos, que incluye las 22,251 geografías y sus asociaciones, en `backups/geography-2026-07-19-pre-reduction-full/public-data.sql.gz`. El archivo local comprimido ocupa 368 MB y pasó verificación de integridad gzip y SHA-256.
 
 El tramo 4 eliminó en una transacción atómica las 11,485 geografías aprobadas. Quedaron 10,766 geografías, los cinco estados focales y ninguna geografía no-ZCTA de los siete estados retirados. Las cascadas retiraron 99 asociaciones de eventos y 99 asociaciones ciclónicas: quedaron 590 y 4,076 respectivamente, sin huérfanos. La tabla continúa ocupando 499 MB físicamente porque todavía no se ha compactado. Esa recuperación y su medición pertenecen exclusivamente al tramo 5.
+
+## Cierre del tramo 5
+
+El tramo 5 compactó y analizó `geographic_areas` con `VACUUM FULL ANALYZE`. La base completa bajó de 528 MB a 268 MB y `geographic_areas` bajó de 499 MB a 239 MB: se recuperaron 260 MB físicos. La tabla conservó exactamente 10,766 filas.
+
+Las ingestas NWS, SPC y NHC fueron pausadas durante la reescritura y reactivadas al terminar; las tres quedaron activas y la retención diaria permanece desactivada. Las ejecuciones posteriores reportaron estado `complete`. La cobertura persistida del MCP fue alineada con los cinco estados focales y `mcp_data_health` devuelve `covered_state_count: 5` con cola geográfica saludable.
+
+Pruebas de aceptación completadas:
+
+- Austin, Miami, New Orleans, Atlanta y Charlotte resolvieron al estado focal correcto.
+- Denver no resolvió a ninguna geografía estatal, como corresponde al alcance retirado.
+- El endpoint público `https://mcp.vectoros.co/health` respondió `status: ok`.
+- `search_storm_events` sobre Texas devolvió eventos recientes de viento con estado, condado y ZCTA derivados.
+- No existen asociaciones geográficas huérfanas.
+
+Los cinco tramos de reducción geográfica están completos.
