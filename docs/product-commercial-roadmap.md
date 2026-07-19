@@ -72,7 +72,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
    - Montana — complete pilot.
    - Texas — geography imported, audited and applied to existing events.
    - Florida — geography imported, audited and applied to existing events.
-   - Louisiana.
+   - Louisiana — geography imported and audited; no persisted Louisiana events currently await enrichment.
    - Georgia.
    - North Carolina.
 2. Make new-event geographic enrichment automatic and observable.
