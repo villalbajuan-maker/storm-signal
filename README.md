@@ -68,7 +68,7 @@ Every MCP tool response also includes `data_health`: national source freshness a
 
 `search_tropical_cyclones` exposes versioned NHC Atlantic advisories as a separate forecast domain. It searches analyzed centers, forecast track points, operational cones, coastal watches/warnings, and 34/50/64-kt wind fields only when their derived Census geography intersects the five-state controlled demo. `data_health.nhc` reports poll freshness, active systems, latest advisories, received product types, and geographic-processing gaps even when no NHC feature currently intersects the demo territory.
 
-Supabase cron is the intended operational scheduler. The legacy GitHub Actions workflow in `.github/workflows/ingest.yml` is still scheduled redundantly and includes an obsolete Texas/Oklahoma historical job; its consolidation into manual recovery-only mode is tracked as hygiene tranche 2. It requires repository secrets named `SUPABASE_URL` and `SUPABASE_SECRET_KEY` while it remains enabled.
+Supabase `pg_cron` is the sole operational ingestion scheduler: NWS runs every 5 minutes, SPC every 10 minutes, and NHC every 5 minutes. `.github/workflows/ingest.yml` has no schedule and is retained only for explicitly dispatched NWS/SPC recovery. The obsolete weekly Texas/Oklahoma historical import was removed. Manual recovery requires repository secrets named `SUPABASE_URL` and `SUPABASE_SECRET_KEY`.
 
 ## Run the MCP server
 

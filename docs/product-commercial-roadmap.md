@@ -49,6 +49,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 ### Operational now
 
 - Persistent Supabase ingestion with source payload retention and ingestion health.
+- Supabase-only automatic scheduling for NWS, SPC, and NHC; GitHub Actions is manual recovery only under [`ingestion-scheduler-closure.md`](ingestion-scheduler-closure.md).
 - Observed SPC hail, wind and tornado reports.
 - NWS severe-thunderstorm and tornado warning evidence.
 - Historical NOAA Storm Events hail evidence.

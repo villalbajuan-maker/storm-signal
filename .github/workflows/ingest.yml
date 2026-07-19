@@ -1,10 +1,6 @@
-name: Ingest severe weather
+name: Manual ingestion recovery
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
-    - cron: "3,13,23,33,43,53 * * * *"
-    - cron: "17 13 * * 0"
   workflow_dispatch:
     inputs:
       source:
@@ -16,18 +12,17 @@ on:
           - all
           - nws
           - spc
-          - historical
 
 permissions:
   contents: read
 
 concurrency:
-  group: storm-signal-ingest-${{ github.event.schedule || inputs.source || 'manual' }}
+  group: storm-signal-manual-recovery-${{ inputs.source || 'manual' }}
   cancel-in-progress: false
 
 jobs:
   nws:
-    if: github.event_name == 'workflow_dispatch' && (inputs.source == 'all' || inputs.source == 'nws') || github.event.schedule == '*/5 * * * *'
+    if: inputs.source == 'all' || inputs.source == 'nws'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -43,7 +38,7 @@ jobs:
         run: python -m storm_signal_recon.ingest --source nws
 
   spc:
-    if: github.event_name == 'workflow_dispatch' && (inputs.source == 'all' || inputs.source == 'spc') || github.event.schedule == '3,13,23,33,43,53 * * * *'
+    if: inputs.source == 'all' || inputs.source == 'spc'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -51,29 +46,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Ingest SPC hail reports
+      - name: Ingest SPC severe-weather reports
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           PYTHONPATH: src
         run: python -m storm_signal_recon.ingest --source spc
-
-  historical:
-    if: github.event_name == 'workflow_dispatch' && (inputs.source == 'all' || inputs.source == 'historical') || github.event.schedule == '17 13 * * 0'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Ingest historical Texas and Oklahoma hail
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-          PYTHONPATH: src
-        run: >-
-          python -m storm_signal_recon.ingest
-          --source historical
-          --states TEXAS,OKLAHOMA
-          --historical-limit 1000
