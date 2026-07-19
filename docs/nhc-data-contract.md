@@ -5,7 +5,7 @@
 **Initial operational scope:** Atlantic basin, including the Gulf and Atlantic coasts  
 **Authority:** NOAA National Hurricane Center (NHC)
 
-**Implementation status:** Phase 1 persistence schema deployed to Supabase on July 19, 2026. Live NHC ingestion remains intentionally inactive pending the archived-advisory importer tranche.
+**Implementation status:** Phase 1 persistence schema and archived-advisory replay completed in Supabase on July 19, 2026. Hurricane Irma `AL112017` advisory 20 persists 32 unique typed features from three checksummed official artifacts; repeated replay creates no duplicates. Live NHC ingestion remains intentionally inactive pending geographic enrichment and the live-ingestion tranche.
 
 ## 1. Promise
 
