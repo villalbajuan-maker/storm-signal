@@ -13,6 +13,9 @@ class GeographicImportTests(unittest.TestCase):
     def test_louisiana_scope_uses_postal_abbreviation(self):
         self.assertEqual(STATE_ABBREVIATIONS["22"], "LA")
 
+    def test_missouri_scope_uses_postal_abbreviation(self):
+        self.assertEqual(STATE_ABBREVIATIONS["29"], "MO")
+
     def test_nebraska_scope_uses_postal_abbreviation(self):
         self.assertEqual(STATE_ABBREVIATIONS["31"], "NE")
 
