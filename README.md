@@ -113,6 +113,15 @@ All normalized geometry should use PostGIS SRID 4326. Preserve source geometry u
 
 The next product increment is the versioned Census boundary and territorial enrichment layer documented in [`docs/geospatial-enrichment-plan.md`](docs/geospatial-enrichment-plan.md) and frozen through [`docs/geospatial-data-contract.md`](docs/geospatial-data-contract.md). It will map event points and polygons to counties, Census places, and ZCTAs while preserving the difference between observed points, warning areas, and approximate ZIP areas.
 
+Run the frozen Montana validation import after applying migrations (requires GDAL's `ogr2ogr` and the linked Supabase CLI):
+
+```bash
+supabase db push
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python3 scripts/import_census_geographies.py --apply
+```
+
+The importer uses TIGER/Line 2025 archives for state, county, and place boundaries. For the national 529 MB ZCTA layer, the pilot obtains complete intersecting geometries through the official Census TIGERweb ACS 2025 layer instead of downloading the entire country.
+
 ## Proposed normalized model
 
 [`schema.sql`](schema.sql) defines the three POC tables: immutable raw `source_records`, queryable `storm_events`, and operational `ingestion_runs`. Two details are intentional:
