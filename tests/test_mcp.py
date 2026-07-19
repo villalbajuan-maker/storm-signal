@@ -83,10 +83,21 @@ class MCPTransportTests(unittest.TestCase):
         self.assertIn("trace_id", body["result"]["structuredContent"])
 
     def test_successful_tool_has_readable_text_fallback(self):
-        database = FakeDatabase({"mcp_get_storm_event": {
-            "event": {"id": "0e8f6a0d-f364-4cdd-8e32-f4c18fed8a64", "county": "Pondera"},
-            "source_versions": [],
-        }})
+        database = FakeDatabase({
+            "mcp_get_storm_event": {
+                "event": {"id": "0e8f6a0d-f364-4cdd-8e32-f4c18fed8a64", "county": "Pondera"},
+                "source_versions": [],
+            },
+            "mcp_get_event_geographies": {
+                "vintage": 2025,
+                "geospatial_status": "complete",
+                "areas": [
+                    {"area_type": "state", "name": "Montana", "geoid": "30"},
+                    {"area_type": "county", "name": "Pondera County", "geoid": "30073"},
+                    {"area_type": "zcta", "name": "ZCTA5 59425", "zcta5": "59425"},
+                ],
+            },
+        })
         app = MCPApplication(StormSignalTools(database))
         _, _, body = asyncio.run(request(app, "POST", "/mcp", {
             "jsonrpc": "2.0", "id": 4, "method": "tools/call",
@@ -96,7 +107,16 @@ class MCPTransportTests(unittest.TestCase):
         }))
         text = body["result"]["content"][0]["text"]
         self.assertIn("Pondera", text)
+        self.assertIn("59425", text)
         self.assertIn("0e8f6a0d-f364-4cdd-8e32-f4c18fed8a64", text)
+        self.assertEqual(body["result"]["structuredContent"]["geography"]["geospatial_status"], "complete")
+        self.assertEqual(
+            body["result"]["structuredContent"]["geography"]["summary"]["zcta_approximate_zip_area"],
+            "59425",
+        )
+        self.assertIn(("mcp_get_event_geographies", {
+            "p_event_id": "0e8f6a0d-f364-4cdd-8e32-f4c18fed8a64"
+        }), database.calls)
 
 
 class MCPToolTests(unittest.TestCase):

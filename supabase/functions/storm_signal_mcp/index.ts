@@ -44,7 +44,7 @@ const TOOLS = [
   },
   {
     name: "get_storm_event",
-    description: "Get one normalized event with all retained immutable source payload versions and evidence limitations.",
+    description: "Get one normalized event with retained source payload versions, Census geography when available, and evidence limitations.",
     inputSchema: schema({ event_id: { type: "string", format: "uuid" } }, ["event_id"]),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
@@ -120,6 +120,21 @@ async function rpc(name: string, parameters: Record<string, unknown>): Promise<a
   return result.status === 204 ? null : await result.json()
 }
 
+function presentGeography(value: any) {
+  const areas = Array.isArray(value?.areas) ? value.areas : []
+  const area = (type: string) => areas.find((item: any) => item.area_type === type)
+  return {
+    ...value,
+    summary: {
+      state: area("state")?.name ?? null,
+      county: area("county")?.name ?? null,
+      place: area("place")?.name ?? null,
+      zcta_approximate_zip_area: area("zcta")?.zcta5 ?? null,
+    },
+    zcta_interpretation: "ZCTA is an approximate ZIP area from Census geography, not a USPS delivery boundary.",
+  }
+}
+
 async function callTool(name: string, a: Args) {
   validate(name, a)
   const trace_id = crypto.randomUUID(), generated_at = new Date().toISOString()
@@ -131,7 +146,8 @@ async function callTool(name: string, a: Args) {
   if (name === "get_storm_event") {
     const data = await rpc("mcp_get_storm_event", { p_event_id: a.event_id })
     if (!data) throw new Error("Storm event not found")
-    return { trace_id, generated_at, data_health, ...data, limitations: LIMITATIONS }
+    const geography = presentGeography(await rpc("mcp_get_event_geographies", { p_event_id: a.event_id }))
+    return { trace_id, generated_at, data_health, ...data, geography, limitations: LIMITATIONS }
   }
   if (name === "summarize_storm_activity") {
     const groups = await rpc("mcp_summarize_storm_activity", { p_start_at: a.start_at, p_end_at: a.end_at, p_group_by: a.group_by ?? "event_type", p_state: a.state ?? null, p_event_types: a.event_types ?? null }) ?? []

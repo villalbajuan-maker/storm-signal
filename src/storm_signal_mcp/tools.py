@@ -40,7 +40,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "name": "get_storm_event",
-        "description": "Get one normalized event with all retained immutable source payload versions and evidence limitations.",
+        "description": "Get one normalized event with retained source payload versions, Census geography when available, and evidence limitations.",
         "inputSchema": _schema({"event_id": {"type": "string", "format": "uuid"}}, ["event_id"]),
         "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     },
@@ -94,7 +94,10 @@ class StormSignalTools:
             data = self.database.rpc("mcp_get_storm_event", {"p_event_id": arguments["event_id"]})
             if data is None:
                 raise ValueError("Storm event not found")
-            result = {**data, "limitations": self._limitations()}
+            geography = self._present_geography(
+                self.database.rpc("mcp_get_event_geographies", {"p_event_id": arguments["event_id"]})
+            )
+            result = {**data, "geography": geography, "limitations": self._limitations()}
         elif name == "summarize_storm_activity":
             data = self.database.rpc("mcp_summarize_storm_activity", {
                 "p_start_at": arguments["start_at"], "p_end_at": arguments["end_at"],
@@ -148,6 +151,22 @@ class StormSignalTools:
             "p_county": a.get("county"), "p_min_hail_inches": a.get("min_hail_inches"),
             "p_status": a.get("status"), "p_lat": a.get("latitude"), "p_lon": a.get("longitude"),
             "p_radius_miles": a.get("radius_miles"), "p_limit": a.get("limit", 50),
+        }
+
+    @staticmethod
+    def _present_geography(value: dict[str, Any] | None) -> dict[str, Any]:
+        geography = value or {"areas": [], "geospatial_status": "insufficient"}
+        areas = geography.get("areas") or []
+        by_type = {area.get("area_type"): area for area in areas}
+        return {
+            **geography,
+            "summary": {
+                "state": (by_type.get("state") or {}).get("name"),
+                "county": (by_type.get("county") or {}).get("name"),
+                "place": (by_type.get("place") or {}).get("name"),
+                "zcta_approximate_zip_area": (by_type.get("zcta") or {}).get("zcta5"),
+            },
+            "zcta_interpretation": "ZCTA is an approximate ZIP area from Census geography, not a USPS delivery boundary.",
         }
 
     @staticmethod
