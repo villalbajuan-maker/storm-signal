@@ -1,0 +1,571 @@
+{
+  "BEGIN_AZIMUTH": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "WNW",
+      "N",
+      "NNW"
+    ]
+  },
+  "BEGIN_DATE_TIME": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "02-MAR-25 14:15:00",
+      "15-MAR-25 02:16:00",
+      "15-MAR-25 02:14:00"
+    ]
+  },
+  "BEGIN_DAY": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "2",
+      "15",
+      "8"
+    ]
+  },
+  "BEGIN_LAT": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "34.3867",
+      "30.64",
+      "30.63"
+    ]
+  },
+  "BEGIN_LOCATION": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "KIRKLAND",
+      "COLLEGE STATION",
+      "HARVEY"
+    ]
+  },
+  "BEGIN_LON": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "-100.0866",
+      "-96.33",
+      "-96.34"
+    ]
+  },
+  "BEGIN_RANGE": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "1.05",
+      "2.76",
+      "2.16"
+    ]
+  },
+  "BEGIN_TIME": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "1415",
+      "216",
+      "214"
+    ]
+  },
+  "BEGIN_YEARMONTH": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "202503"
+    ]
+  },
+  "CATEGORY": {
+    "present": 25,
+    "missing": 0,
+    "null": 25,
+    "types": [],
+    "examples": []
+  },
+  "CZ_FIPS": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "75",
+      "41",
+      "51"
+    ]
+  },
+  "CZ_NAME": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "CHILDRESS",
+      "BRAZOS",
+      "BURLESON"
+    ]
+  },
+  "CZ_TIMEZONE": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "CST-6"
+    ]
+  },
+  "CZ_TYPE": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "C"
+    ]
+  },
+  "DAMAGE_CROPS": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "0.00K"
+    ]
+  },
+  "DAMAGE_PROPERTY": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "0.00K"
+    ]
+  },
+  "DATA_SOURCE": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "CSV"
+    ]
+  },
+  "DEATHS_DIRECT": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "0"
+    ]
+  },
+  "DEATHS_INDIRECT": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "0"
+    ]
+  },
+  "END_AZIMUTH": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "WNW",
+      "N",
+      "NNW"
+    ]
+  },
+  "END_DATE_TIME": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "02-MAR-25 14:15:00",
+      "15-MAR-25 02:16:00",
+      "15-MAR-25 02:14:00"
+    ]
+  },
+  "END_DAY": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "2",
+      "15",
+      "8"
+    ]
+  },
+  "END_LAT": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "34.3867",
+      "30.64",
+      "30.63"
+    ]
+  },
+  "END_LOCATION": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "KIRKLAND",
+      "COLLEGE STATION",
+      "HARVEY"
+    ]
+  },
+  "END_LON": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "-100.0866",
+      "-96.33",
+      "-96.34"
+    ]
+  },
+  "END_RANGE": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "1.05",
+      "2.76",
+      "2.16"
+    ]
+  },
+  "END_TIME": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "1415",
+      "216",
+      "214"
+    ]
+  },
+  "END_YEARMONTH": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "202503"
+    ]
+  },
+  "EPISODE_ID": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "199058",
+      "199957",
+      "199719"
+    ]
+  },
+  "EPISODE_NARRATIVE": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "A compact upper level low pressure system tracked across New Mexico and West Texas from the morning to afternoon on the second. Strong forcing for ascent with this system combined with a dryline in the Rolling Plains and abundant instability generated isolated thunderstorms in the extreme southeastern Texas Panhandle into western Oklahoma. One of these storms became severe in eastern Childress County producing quarter size hail.",
+      "Storms across portions of the Brazos Valley and the Piney Woods area produced large hail.   Countless reports came from College Station.",
+      "Severe thunderstorms produced large hail over Polk and San Jacinto counties."
+    ]
+  },
+  "EVENT_ID": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "1230425",
+      "1237735",
+      "1237733"
+    ]
+  },
+  "EVENT_NARRATIVE": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "A public report was received of quarter size hail west of Kirkland.",
+      "Hail was reported via MPING near College Station.",
+      "Hail was reported via MPING near Bryan."
+    ]
+  },
+  "EVENT_TYPE": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "Hail"
+    ]
+  },
+  "FLOOD_CAUSE": {
+    "present": 25,
+    "missing": 0,
+    "null": 25,
+    "types": [],
+    "examples": []
+  },
+  "INJURIES_DIRECT": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "0"
+    ]
+  },
+  "INJURIES_INDIRECT": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "0"
+    ]
+  },
+  "MAGNITUDE": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "1.00",
+      "1.50",
+      "1.75"
+    ]
+  },
+  "MAGNITUDE_TYPE": {
+    "present": 25,
+    "missing": 0,
+    "null": 25,
+    "types": [],
+    "examples": []
+  },
+  "MONTH_NAME": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "March"
+    ]
+  },
+  "SOURCE": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "Public",
+      "Trained Spotter"
+    ]
+  },
+  "STATE": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "TEXAS"
+    ]
+  },
+  "STATE_FIPS": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "48"
+    ]
+  },
+  "TOR_F_SCALE": {
+    "present": 25,
+    "missing": 0,
+    "null": 25,
+    "types": [],
+    "examples": []
+  },
+  "TOR_LENGTH": {
+    "present": 25,
+    "missing": 0,
+    "null": 25,
+    "types": [],
+    "examples": []
+  },
+  "TOR_OTHER_CZ_FIPS": {
+    "present": 25,
+    "missing": 0,
+    "null": 25,
+    "types": [],
+    "examples": []
+  },
+  "TOR_OTHER_CZ_NAME": {
+    "present": 25,
+    "missing": 0,
+    "null": 25,
+    "types": [],
+    "examples": []
+  },
+  "TOR_OTHER_CZ_STATE": {
+    "present": 25,
+    "missing": 0,
+    "null": 25,
+    "types": [],
+    "examples": []
+  },
+  "TOR_OTHER_WFO": {
+    "present": 25,
+    "missing": 0,
+    "null": 25,
+    "types": [],
+    "examples": []
+  },
+  "TOR_WIDTH": {
+    "present": 25,
+    "missing": 0,
+    "null": 25,
+    "types": [],
+    "examples": []
+  },
+  "WFO": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "LUB",
+      "HGX"
+    ]
+  },
+  "YEAR": {
+    "present": 25,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "2025"
+    ]
+  }
+}

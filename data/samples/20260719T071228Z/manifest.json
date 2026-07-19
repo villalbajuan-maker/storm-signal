@@ -1,0 +1,47 @@
+{
+  "run_id": "20260719T071228Z",
+  "status": "complete",
+  "sources": [
+    {
+      "source": "nws_alerts",
+      "source_url": "https://api.weather.gov/alerts/active",
+      "retrieved_at": "2026-07-19T07:12:28.720884+00:00",
+      "content_type": "application/geo+json",
+      "sha256": "ef6f2a9231dbc5fcf77ef706e7fe5baa6561e2057a9abc456ba9c7550648bb63",
+      "records": 326,
+      "raw_file": "nws_alerts.json",
+      "field_inventory": "nws_alerts.fields.json"
+    },
+    {
+      "source": "spc_hail_today",
+      "source_url": "https://www.spc.noaa.gov/climo/reports/today_hail.csv",
+      "retrieved_at": "2026-07-19T07:12:29.198774+00:00",
+      "content_type": "text/csv",
+      "sha256": "428d5956003a717fbcb2e37e3e8bdbf9589a353ee59485a4516bfa233689fc2d",
+      "records": 5,
+      "raw_file": "spc_hail_today.csv",
+      "field_inventory": "spc_hail_today.fields.json"
+    },
+    {
+      "source": "spc_hail_yesterday",
+      "source_url": "https://www.spc.noaa.gov/climo/reports/yesterday_hail.csv",
+      "retrieved_at": "2026-07-19T07:12:29.535016+00:00",
+      "content_type": "text/csv",
+      "sha256": "99c060ff3a4b690a8379df87c1c6a391155430de28cf1de9d109eed9025a80e1",
+      "records": 5,
+      "raw_file": "spc_hail_yesterday.csv",
+      "field_inventory": "spc_hail_yesterday.fields.json"
+    },
+    {
+      "source": "noaa_storm_events_hail",
+      "source_url": "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/StormEvents_details-ftp_v1.0_d2025_c20260526.csv.gz",
+      "retrieved_at": "2026-07-19T07:12:34.152315+00:00",
+      "content_type": "text/csv",
+      "sha256": "a1a4ac91f6e2c80f620277ada8b32eb63f36aba2889574244054cb769261e8a7",
+      "records": 25,
+      "raw_file": "noaa_storm_events_hail.csv",
+      "field_inventory": "noaa_storm_events_hail.fields.json"
+    }
+  ],
+  "errors": []
+}

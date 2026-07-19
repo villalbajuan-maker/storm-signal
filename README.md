@@ -1,0 +1,85 @@
+# Storm Signal data reconnaissance prototype
+
+This proof of concept inspects—not yet normalizes or serves—three authoritative severe-weather sources. It downloads representative raw payloads, preserves provenance and hashes, and creates a field inventory showing the exact keys, observed types, nulls, missing values, and examples in each run.
+
+## Run it
+
+Requires Python 3.11+ and outbound HTTPS access; there are no runtime dependencies.
+
+```bash
+PYTHONPATH=src python -m storm_signal_recon.cli
+```
+
+Optional controls:
+
+```bash
+PYTHONPATH=src python -m storm_signal_recon.cli \
+  --year 2025 --states TEXAS,OKLAHOMA --historical-limit 100
+```
+
+Each timestamped directory under `data/runs/` contains raw JSON/CSV, one `*.fields.json` inventory per successful source, and a `manifest.json` with retrieval URLs, timestamps, record counts, SHA-256 hashes, and errors. A source failure produces a partial run without discarding successful evidence.
+
+Run the offline test suite with:
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -v
+```
+
+## Persist into Supabase
+
+Apply the migrations, then provide backend-only credentials through the environment:
+
+```bash
+supabase link --project-ref efzezjfvhkywxukluowh
+supabase db push
+SUPABASE_URL=https://efzezjfvhkywxukluowh.supabase.co \
+SUPABASE_SECRET_KEY=sb_secret_... \
+PYTHONPATH=src python -m storm_signal_recon.ingest --source all
+```
+
+Never commit the secret key. The ingestor uses it only from the process environment and sends modern `sb_secret_...` credentials solely in the `apikey` header. Legacy `SUPABASE_SERVICE_ROLE_KEY` remains a temporary fallback. Every source collection creates an `ingestion_runs` row, versions raw records by canonical payload hash, and upserts the current normalized event by source identity.
+
+The GitHub Actions workflow in `.github/workflows/ingest.yml` runs NWS every 5 minutes, SPC every 10 minutes, and the bounded Texas/Oklahoma historical refresh weekly. It requires repository secrets named `SUPABASE_URL` and `SUPABASE_SECRET_KEY`.
+
+## What each source actually contributes
+
+| Source | Payload | Useful identifiers and fields | Recommended collection | Important limitation |
+|---|---|---|---|---|
+| NWS active alerts | GeoJSON FeatureCollection | top-level feature `id`; `properties.id`, `sent`, `effective`, `onset`, `expires`, `status`, `messageType`, `event`, `severity`, `certainty`, `urgency`, `areaDesc`, `geocode`, `parameters`; feature `geometry` | Every 5 minutes (comfortably above NWS's published 30-second request floor) | Active endpoint is not a durable history. Geometry may be null; affected zones then carry location evidence. A warning is not proof of hail at a property. |
+| SPC preliminary hail reports | CSV, today and yesterday | `Time`, `Size` (hundredths of an inch), `Location`, `County`, `State`, `Lat`, `Lon`, `Comments` | Every 10 minutes; refetch both days because reports are preliminary | No official stable row ID. Times are in UTC, dates are inferred from the report-day product, rows can be corrected, and reported points are not hail footprints. |
+| NCEI Storm Events details | annual gzip-compressed CSV | `EVENT_ID` (record key), `EPISODE_ID`, date/time and timezone fields, `EVENT_TYPE`, `MAGNITUDE`, state/county, damage fields, narratives, source, begin/end coordinates | Import selected annual files; periodically check revision filename | Official historical evidence is delayed and revised. Coordinates can be absent or approximate; damage strings need parsing; local timestamps require `CZ_TIMEZONE` interpretation. |
+
+Source identifiers should be used as follows:
+
+- NWS: upsert the current normalized event by alert `properties.id`; retain each distinct payload hash in `source_records` to preserve updates, cancellations, and corrections. Do not use `references` as the alert's own identity.
+- SPC: construct a provisional fingerprint from report date + type + time + rounded coordinates + size, while retaining the entire raw daily file and allowing corrected rows to supersede earlier interpretations.
+- NCEI: `EVENT_ID` is the individual event key and joins details to locations/fatalities; `EPISODE_ID` groups related events. Include the annual file revision in provenance.
+
+## Geographic representation
+
+- NWS returns a GeoJSON geometry on each feature when a polygon is supplied. When it is null, preserve `affectedZones`/UGC geocodes rather than inventing a polygon.
+- SPC provides point latitude/longitude. Treat it as an observer report point only.
+- Storm Events details provides begin/end coordinates; an event may be a point, an approximate line, or have no usable geometry. The separate locations file can add episode/event location rows later.
+
+All normalized geometry should use PostGIS SRID 4326. Preserve source geometry unchanged in `source_records`; derived centroids and distance calculations must be marked as derived.
+
+## Proposed normalized model
+
+[`schema.sql`](schema.sql) defines the three POC tables: immutable raw `source_records`, queryable `storm_events`, and operational `ingestion_runs`. Two details are intentional:
+
+1. Raw records are versioned by `(source, source_record_id, payload_hash)`, while normalized events upsert on `(source, source_record_id)`.
+2. Both full geometry and centroid have GiST indexes, supporting containment/intersection and radius searches without throwing away polygon evidence.
+
+Normalization should remain source-specific. Do not force warning severity, hail size, and historical damage into one overloaded score. Store common facts in columns and source-specific evidence in the immutable raw payload.
+
+## Honest product boundary
+
+This data can support statements about warnings, nearby reported hail, historical events, relative severity, and areas worth investigating. It cannot establish that a particular property was hit, damaged, needs a roof, or represents a sales lead. Confidence must be computed deterministically from retrieved evidence and returned with its limitations; it must not be improvised by the language model.
+
+## Official references
+
+- [NWS API documentation](https://www.weather.gov/documentation/services-web-api)
+- [NWS Alerts Web Service](https://www.weather.gov/documentation/services-web-alerts)
+- [SPC daily storm reports](https://www.spc.noaa.gov/climo/reports/today.html)
+- [NCEI Storm Events bulk downloads](https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/)
+- [Storm Data bulk CSV field format](https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/Storm-Data-Bulk-csv-Format.pdf)

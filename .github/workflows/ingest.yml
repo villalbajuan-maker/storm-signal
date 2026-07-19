@@ -1,0 +1,80 @@
+name: Ingest severe weather
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+    - cron: "3,13,23,33,43,53 * * * *"
+    - cron: "17 13 * * 0"
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Source to ingest
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - nws
+          - spc
+          - historical
+
+permissions:
+  contents: read
+
+concurrency:
+  group: storm-signal-ingest-${{ github.event.schedule || inputs.source || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  nws:
+    if: github.event_name == 'workflow_dispatch' && (inputs.source == 'all' || inputs.source == 'nws') || github.event.schedule == '*/5 * * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ingest NWS warnings
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          PYTHONPATH: src
+        run: python -m storm_signal_recon.ingest --source nws
+
+  spc:
+    if: github.event_name == 'workflow_dispatch' && (inputs.source == 'all' || inputs.source == 'spc') || github.event.schedule == '3,13,23,33,43,53 * * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ingest SPC hail reports
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          PYTHONPATH: src
+        run: python -m storm_signal_recon.ingest --source spc
+
+  historical:
+    if: github.event_name == 'workflow_dispatch' && (inputs.source == 'all' || inputs.source == 'historical') || github.event.schedule == '17 13 * * 0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ingest historical Texas and Oklahoma hail
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          PYTHONPATH: src
+        run: >-
+          python -m storm_signal_recon.ingest
+          --source historical
+          --states TEXAS,OKLAHOMA
+          --historical-limit 1000
+

@@ -1,0 +1,36 @@
+{
+  "run_id": "20260719T071057Z",
+  "status": "partial",
+  "sources": [
+    {
+      "source": "nws_alerts",
+      "source_url": "https://api.weather.gov/alerts/active",
+      "retrieved_at": "2026-07-19T07:10:57.921231+00:00",
+      "content_type": "application/geo+json",
+      "sha256": "a36d9231304f69a970ef50f27eef14fbcb1054c8125f946c67e87a9daf9b6bc5",
+      "records": 326,
+      "raw_file": "nws_alerts.json",
+      "field_inventory": "nws_alerts.fields.json"
+    },
+    {
+      "source": "noaa_storm_events_hail",
+      "source_url": "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/StormEvents_details-ftp_v1.0_d2025_c20260526.csv.gz",
+      "retrieved_at": "2026-07-19T07:11:04.974661+00:00",
+      "content_type": "text/csv",
+      "sha256": "a1a4ac91f6e2c80f620277ada8b32eb63f36aba2889574244054cb769261e8a7",
+      "records": 25,
+      "raw_file": "noaa_storm_events_hail.csv",
+      "field_inventory": "noaa_storm_events_hail.fields.json"
+    }
+  ],
+  "errors": [
+    {
+      "source": "spc_hail_today",
+      "error": "HTTPError: HTTP Error 404: Not Found"
+    },
+    {
+      "source": "spc_hail_yesterday",
+      "error": "HTTPError: HTTP Error 404: Not Found"
+    }
+  ]
+}

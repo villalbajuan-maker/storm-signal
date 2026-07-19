@@ -1,0 +1,104 @@
+{
+  "Comments": {
+    "present": 5,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "Broadcast media report of quarter size hail near Brooksville... FL. (TBW)",
+      "Heavy rain of 1.29 inch in less than an hour. (MSO)",
+      "Video on social media showed significant accumulating hail with the largest stones estimated at quarter size. (TFX)"
+    ]
+  },
+  "County": {
+    "present": 5,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "Hernando",
+      "Deer Lodge",
+      "Teton"
+    ]
+  },
+  "Lat": {
+    "present": 5,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "28.54",
+      "46.18",
+      "47.57"
+    ]
+  },
+  "Location": {
+    "present": 5,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "1 SSW Brooksville",
+      "5 WNW West Valley",
+      "5 N Augusta"
+    ]
+  },
+  "Lon": {
+    "present": 5,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "-82.4",
+      "-113.11",
+      "-112.39"
+    ]
+  },
+  "Size": {
+    "present": 5,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "100"
+    ]
+  },
+  "State": {
+    "present": 5,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "FL",
+      "MT",
+      "WI"
+    ]
+  },
+  "Time": {
+    "present": 5,
+    "missing": 0,
+    "null": 0,
+    "types": [
+      "str"
+    ],
+    "examples": [
+      "1905",
+      "2128",
+      "2200"
+    ]
+  }
+}
