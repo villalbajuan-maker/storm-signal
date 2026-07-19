@@ -73,6 +73,15 @@ def main() -> int:
     require({event.get("state") for event in default_search.get("events", [])} <= COVERED, "default search leaked a state")
     results.append({"test": "default_search_five_state_scope", "passed": True, "count": default_search.get("count")})
 
+    warnings, error = call("search_storm_events", {
+        "event_types": ["severe_thunderstorm_warning", "tornado_warning"], "limit": 200,
+    }, 4)
+    require(not error and warnings.get("status") == "in_coverage", "NWS warning search failed")
+    require(warnings.get("count", 0) > 0, "no covered NWS warnings are visible")
+    require(all(event.get("source") == "nws_alerts" for event in warnings.get("events", [])), "warning search returned another source")
+    require({event.get("state") for event in warnings.get("events", [])} <= COVERED, "warning search leaked a state")
+    results.append({"test": "nws_same_state_normalization", "passed": True, "count": warnings.get("count")})
+
     for index, (state_name, state_code) in enumerate(STATE_NAMES.items(), start=10):
         content, error = call("search_storm_events", {"state": state_name, "limit": 20}, index)
         require(not error and content.get("status") == "in_coverage", f"{state_name} was not accepted")

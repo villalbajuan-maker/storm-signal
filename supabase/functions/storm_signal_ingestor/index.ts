@@ -6,6 +6,21 @@ const USER_AGENT = "storm-signal-ingestor/0.2 (contact: https://vectoros.co)"
 type Row = Record<string, any>
 type Pair = { raw: Row; event: Row }
 
+const STATE_CODE_BY_FIPS: Record<string, string> = {
+  "01":"AL","02":"AK","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE","11":"DC",
+  "12":"FL","13":"GA","15":"HI","16":"ID","17":"IL","18":"IN","19":"IA","20":"KS","21":"KY",
+  "22":"LA","23":"ME","24":"MD","25":"MA","26":"MI","27":"MN","28":"MS","29":"MO","30":"MT",
+  "31":"NE","32":"NV","33":"NH","34":"NJ","35":"NM","36":"NY","37":"NC","38":"ND","39":"OH",
+  "40":"OK","41":"OR","42":"PA","44":"RI","45":"SC","46":"SD","47":"TN","48":"TX","49":"UT",
+  "50":"VT","51":"VA","53":"WA","54":"WV","55":"WI","56":"WY","60":"AS","66":"GU","69":"MP",
+  "72":"PR","78":"VI",
+}
+
+function nwsState(props: Row): string | null {
+  const same = props.geocode?.SAME?.find((value: unknown) => typeof value === "string" && value.length >= 3)
+  return same ? STATE_CODE_BY_FIPS[same.slice(1, 3)] ?? null : null
+}
+
 function stable(value: any): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`
   if (value && typeof value === "object") {
@@ -81,7 +96,7 @@ async function fetchNws(): Promise<Pair[]> {
         event_type: eventType, status: props.status, started_at: props.onset ?? props.effective ?? props.sent,
         ended_at: props.ends ?? props.expires, magnitude: null, magnitude_unit: null,
         severity: props.severity, urgency: props.urgency, certainty: props.certainty,
-        geometry: feature.geometry, state: props.geocode?.SAME?.[0]?.slice(0, 2) ?? null, county: null,
+        geometry: feature.geometry, state: nwsState(props), county: null,
         source: "nws_alerts", source_record_id: sourceId, source_url: feature.id ?? NWS_URL,
       },
     })

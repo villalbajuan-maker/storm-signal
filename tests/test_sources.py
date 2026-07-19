@@ -21,6 +21,33 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(fields["properties.event"]["examples"], ["Tornado Warning"])
         self.assertEqual(fields["properties.severity"]["null"], 1)
 
+    def test_nws_same_code_uses_state_fips_not_partition_prefix(self):
+        snap = Snapshot(
+            "nws_alerts", "https://api.weather.gov/alerts/active", "2026-07-19T21:00:00+00:00",
+            "application/geo+json", json.dumps({"features": [{
+                "id": "urn:test:tx-warning",
+                "geometry": {"type": "Polygon", "coordinates": []},
+                "properties": {
+                    "id": "urn:test:tx-warning", "event": "Tornado Warning", "status": "Actual",
+                    "sent": "2026-07-19T20:00:00Z", "geocode": {"SAME": ["048453"]},
+                },
+            }]}).encode(),
+        )
+        _, event = normalize_snapshot(snap)[0]
+        self.assertEqual(event["state"], "TX")
+
+    def test_nws_same_code_supports_five_state_demo(self):
+        expected = {"012001": "FL", "013001": "GA", "022001": "LA", "037001": "NC", "048001": "TX"}
+        for same, state in expected.items():
+            snap = Snapshot(
+                "nws_alerts", "x", "2026-07-19T21:00:00+00:00", "application/geo+json",
+                json.dumps({"features": [{"id": same, "geometry": None, "properties": {
+                    "id": same, "event": "Severe Thunderstorm Warning", "sent": "2026-07-19T20:00:00Z",
+                    "geocode": {"SAME": [same]},
+                }}]}).encode(),
+            )
+            self.assertEqual(normalize_snapshot(snap)[0][1]["state"], state)
+
     def test_parses_csv_without_external_dependencies(self):
         snap = Snapshot("spc_hail_today", "x", "now", "text/csv", b"Time,Size,Lat,Lon\n1200,100,32.1,-97.1\n")
         self.assertEqual(parse_records(snap)[0]["Size"], "100")
