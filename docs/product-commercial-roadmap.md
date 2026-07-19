@@ -54,7 +54,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 - Historical NOAA Storm Events hail evidence.
 - Four read-only MCP tools: `search_storm_events`, `get_storm_event`, `assess_location`, and `summarize_storm_activity`.
 - Census/PostGIS state, county, place and ZCTA enrichment.
-- Geographic pilot coverage for Montana and Texas.
+- Audited Census/PostGIS coverage for the initial 12-state commercial sequence.
 - `get_storm_event` returns geographic lineage and identifies ZCTA as an approximate ZIP area, not a USPS delivery boundary.
 
 ### Partially delivered
