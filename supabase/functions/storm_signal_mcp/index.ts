@@ -15,6 +15,7 @@ const EVENT_TYPES = ["hail_report", "severe_thunderstorm_warning", "tornado_warn
 const LIMITATIONS = [
   "Warnings describe forecast or warned areas; they do not prove hail at a property.",
   "SPC reports are preliminary observer points, not hail footprints, and may be corrected.",
+  "SPC wind and tornado reports are preliminary observation points; unknown speed or scale is preserved rather than inferred.",
   "Historical coordinates can be approximate or absent.",
   "This evidence does not establish property damage, roof condition, or sales qualification.",
 ]

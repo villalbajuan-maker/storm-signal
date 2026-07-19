@@ -10,7 +10,7 @@ from .sources import (
     default_historical_year,
     fetch_ncei_hail_sample,
     fetch_nws_alerts,
-    fetch_spc_hail,
+    fetch_spc_reports,
     write_snapshot,
 )
 
@@ -31,8 +31,8 @@ def main(argv: list[str] | None = None) -> int:
     manifest = {"run_id": run_id, "status": "running", "sources": [], "errors": []}
     collectors = [
         ("nws_alerts", fetch_nws_alerts),
-        ("spc_hail_today", lambda: fetch_spc_hail("today")),
-        ("spc_hail_yesterday", lambda: fetch_spc_hail("yesterday")),
+        *[(f"spc_{kind}_{day}", lambda day=day, kind=kind: fetch_spc_reports(day, kind))
+          for day in ("today", "yesterday") for kind in ("hail", "wind", "torn")],
         (
             "noaa_storm_events_hail",
             lambda: fetch_ncei_hail_sample(args.year, args.states.split(","), args.historical_limit),
@@ -52,4 +52,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

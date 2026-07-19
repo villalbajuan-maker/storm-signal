@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 NWS_ALERTS_URL = "https://api.weather.gov/alerts/active"
-SPC_URL = "https://www.spc.noaa.gov/climo/reports/{day}_hail.csv"
+SPC_URL = "https://www.spc.noaa.gov/climo/reports/{day}_{kind}.csv"
 SPC_PAGE_URL = "https://www.spc.noaa.gov/climo/reports/{day}.html"
 NCEI_INDEX_URL = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/"
 USER_AGENT = "storm-signal-recon/0.1 (data-reconnaissance prototype)"
@@ -47,12 +47,18 @@ def fetch_nws_alerts() -> Snapshot:
 
 
 def fetch_spc_hail(day: str) -> Snapshot:
+    return fetch_spc_reports(day, "hail")
+
+
+def fetch_spc_reports(day: str, kind: str) -> Snapshot:
     if day not in {"today", "yesterday"}:
         raise ValueError("SPC day must be 'today' or 'yesterday'")
+    if kind not in {"hail", "wind", "torn"}:
+        raise ValueError("SPC report kind must be 'hail', 'wind', or 'torn'")
     page = fetch(SPC_PAGE_URL.format(day=day), "text/html")
     cycle = discover_spc_cycle_date(page.body.decode("iso-8859-1", "replace"))
-    snap = fetch(SPC_URL.format(day=day), "text/csv")
-    return Snapshot(f"spc_hail_{cycle.isoformat()}", snap.source_url, snap.retrieved_at, snap.content_type, snap.body)
+    snap = fetch(SPC_URL.format(day=day, kind=kind), "text/csv")
+    return Snapshot(f"spc_{kind}_{cycle.isoformat()}", snap.source_url, snap.retrieved_at, snap.content_type, snap.body)
 
 
 def discover_spc_cycle_date(page_html: str) -> date:

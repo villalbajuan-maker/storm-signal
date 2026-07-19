@@ -46,10 +46,10 @@ def normalize_snapshot(snapshot: Snapshot) -> list[tuple[dict[str, Any], dict[st
     records = parse_records(snapshot)
     if snapshot.source == "nws_alerts":
         return [pair for record in records if (pair := normalize_nws(record, snapshot))]
-    if snapshot.source.startswith("spc_hail_"):
-        cycle_token = snapshot.source.removeprefix("spc_hail_")
+    if match := re.fullmatch(r"spc_(hail|wind|torn)_(.+)", snapshot.source):
+        kind, cycle_token = match.groups()
         cycle = date.fromisoformat(cycle_token) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", cycle_token) else spc_cycle_date(cycle_token, snapshot.retrieved_at)
-        return [normalize_spc(record, snapshot, cycle) for record in records]
+        return [normalize_spc(record, snapshot, cycle, kind) for record in records]
     if snapshot.source == "noaa_storm_events_hail":
         return [normalize_ncei(record, snapshot) for record in records]
     raise ValueError(f"Unsupported snapshot source: {snapshot.source}")
@@ -91,22 +91,24 @@ def _nws_state(props: dict[str, Any]) -> str | None:
     return same_codes[0][:2] if same_codes else None
 
 
-def normalize_spc(record: dict[str, Any], snapshot: Snapshot, cycle: date) -> tuple[dict[str, Any], dict[str, Any]]:
+def normalize_spc(record: dict[str, Any], snapshot: Snapshot, cycle: date, kind: str = "hail") -> tuple[dict[str, Any], dict[str, Any]]:
     started = spc_report_time(cycle, record["Time"])
+    metric_field = {"hail": "Size", "wind": "Speed", "torn": "F_Scale"}[kind]
+    metric = record.get(metric_field)
     identity = "|".join([
-        cycle.isoformat(), "hail", record["Time"], record["Lat"], record["Lon"], record["Size"]
+        cycle.isoformat(), kind, record["Time"], record["Lat"], record["Lon"], metric or ""
     ])
     source_id = hashlib.sha256(identity.encode("utf-8")).hexdigest()
     raw = _raw_record("spc_reports", source_id, record, snapshot)
     point = {"type": "Point", "coordinates": [float(record["Lon"]), float(record["Lat"])]}
     normalized = {
-        "event_type": "hail_report",
+        "event_type": {"hail": "hail_report", "wind": "wind_report", "torn": "tornado_report"}[kind],
         "status": "preliminary",
         "started_at": started.isoformat(),
         "ended_at": started.isoformat(),
-        "magnitude": float(record["Size"]) / 100,
-        "magnitude_unit": "inch",
-        "severity": None,
+        "magnitude": float(metric) / 100 if kind == "hail" and metric not in (None, "", "UNK") else float(metric) if kind == "wind" and metric not in (None, "", "UNK") else None,
+        "magnitude_unit": "inch" if kind == "hail" else "mph" if kind == "wind" and metric not in (None, "", "UNK") else None,
+        "severity": metric if kind == "torn" and metric not in (None, "", "UNK") else None,
         "urgency": None,
         "certainty": "Observed",
         "geometry": point,

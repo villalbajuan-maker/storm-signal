@@ -8,7 +8,7 @@ from storm_signal_recon.normalize import ncei_time, normalize_snapshot, spc_cycl
 
 class SourceTests(unittest.TestCase):
     def test_spc_uses_links_exposed_by_daily_report_pages(self):
-        self.assertEqual(SPC_URL.format(day="today"), "https://www.spc.noaa.gov/climo/reports/today_hail.csv")
+        self.assertEqual(SPC_URL.format(day="today", kind="hail"), "https://www.spc.noaa.gov/climo/reports/today_hail.csv")
 
     def test_discovers_latest_revision_for_year(self):
         html = "StormEvents_details-ftp_v1.0_d2025_c20260101.csv.gz x StormEvents_details-ftp_v1.0_d2025_c20260202.csv.gz"
@@ -55,6 +55,31 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(raw["source"], "spc_reports")
         self.assertEqual(event["magnitude"], 1.5)
         self.assertEqual(event["geometry"]["coordinates"], [-97.1, 32.1])
+
+    def test_normalizes_spc_wind_and_unknown_speed(self):
+        measured = Snapshot(
+            "spc_wind_2026-07-18", "https://example.test", "2026-07-19T14:00:00+00:00", "text/csv",
+            b"Time,Speed,Location,County,State,Lat,Lon,Comments\n2002,61,Airport,County,MD,39.17,-76.68,Measured\n",
+        )
+        _, event = normalize_snapshot(measured)[0]
+        self.assertEqual((event["event_type"], event["magnitude"], event["magnitude_unit"]), ("wind_report", 61.0, "mph"))
+        unknown = Snapshot(
+            "spc_wind_2026-07-18", "https://example.test", "2026-07-19T14:00:00+00:00", "text/csv",
+            b"Time,Speed,Location,County,State,Lat,Lon,Comments\n2003,UNK,Here,County,PA,40.1,-77.1,Trees down\n",
+        )
+        _, unknown_event = normalize_snapshot(unknown)[0]
+        self.assertIsNone(unknown_event["magnitude"])
+        self.assertIsNone(unknown_event["magnitude_unit"])
+
+    def test_normalizes_preliminary_tornado_without_inventing_scale(self):
+        snap = Snapshot(
+            "spc_torn_2026-07-18", "https://example.test", "2026-07-19T14:00:00+00:00", "text/csv",
+            b"Time,F_Scale,Location,County,State,Lat,Lon,Comments\n2016,UNK,Here,Jefferson,PA,41.08,-79.2,Video\n",
+        )
+        _, event = normalize_snapshot(snap)[0]
+        self.assertEqual(event["event_type"], "tornado_report")
+        self.assertIsNone(event["magnitude"])
+        self.assertIsNone(event["severity"])
 
 
 if __name__ == "__main__":

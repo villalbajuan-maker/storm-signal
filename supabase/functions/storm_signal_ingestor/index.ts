@@ -1,5 +1,5 @@
 const NWS_URL = "https://api.weather.gov/alerts/active"
-const SPC_URL = (day: string) => `https://www.spc.noaa.gov/climo/reports/${day}_hail.csv`
+const SPC_URL = (day: string, kind: string) => `https://www.spc.noaa.gov/climo/reports/${day}_${kind}.csv`
 const SPC_PAGE_URL = (day: string) => `https://www.spc.noaa.gov/climo/reports/${day}.html`
 const USER_AGENT = "storm-signal-ingestor/0.2 (contact: https://vectoros.co)"
 
@@ -89,25 +89,30 @@ async function fetchNws(): Promise<Pair[]> {
   return pairs
 }
 
-async function fetchSpcDay(day: string): Promise<Pair[]> {
+async function fetchSpcDay(day: string, kind: "hail" | "wind" | "torn"): Promise<Pair[]> {
   const pageResponse = await fetch(SPC_PAGE_URL(day), { headers: { Accept: "text/html", "User-Agent": USER_AGENT } })
   if (!pageResponse.ok) throw new Error(`SPC ${day} page ${pageResponse.status}`)
   const cycle = cycleDateFromPage(await pageResponse.text())
-  const sourceUrl = SPC_URL(day)
+  const sourceUrl = SPC_URL(day, kind)
   const response = await fetch(sourceUrl, { headers: { Accept: "text/csv", "User-Agent": USER_AGENT } })
   if (!response.ok) throw new Error(`SPC ${day} ${response.status}`)
   const retrievedAt = new Date().toISOString()
   const pairs: Pair[] = []
   for (const record of parseCsv(await response.text())) {
-    if (!record.Time || !record.Lat || !record.Lon || !record.Size) continue
+    if (!record.Time || !record.Lat || !record.Lon) continue
     const startedAt = reportTime(cycle, record.Time)
-    const identity = `${cycle.toISOString().slice(0, 10)}|hail|${record.Time}|${record.Lat}|${record.Lon}|${record.Size}`
+    const eventType = kind === "hail" ? "hail_report" : kind === "wind" ? "wind_report" : "tornado_report"
+    const metric = kind === "hail" ? record.Size : kind === "wind" ? record.Speed : record.F_Scale
+    const numericMetric = metric && metric !== "UNK" && Number.isFinite(Number(metric)) ? Number(metric) : null
+    const identity = `${cycle.toISOString().slice(0, 10)}|${kind}|${record.Time}|${record.Lat}|${record.Lon}|${metric ?? ""}`
     const sourceId = await sha256Text(identity)
     pairs.push({
       raw: await rawRecord("spc_reports", sourceId, record, retrievedAt, sourceUrl),
       event: {
-        event_type: "hail_report", status: "preliminary", started_at: startedAt, ended_at: startedAt,
-        magnitude: Number(record.Size) / 100, magnitude_unit: "inch", severity: null, urgency: null,
+        event_type: eventType, status: "preliminary", started_at: startedAt, ended_at: startedAt,
+        magnitude: kind === "hail" && numericMetric !== null ? numericMetric / 100 : kind === "wind" ? numericMetric : null,
+        magnitude_unit: kind === "hail" ? "inch" : kind === "wind" && numericMetric !== null ? "mph" : null,
+        severity: kind === "torn" && metric && metric !== "UNK" ? metric : null, urgency: null,
         certainty: "Observed", geometry: { type: "Point", coordinates: [Number(record.Lon), Number(record.Lat)] },
         state: record.State || null, county: record.County || null,
         source: "spc_reports", source_record_id: sourceId, source_url: sourceUrl,
@@ -172,7 +177,14 @@ Deno.serve(async (request) => {
   const source = body.source
   try {
     if (source === "nws") return Response.json(await ingest("nws_alerts", fetchNws))
-    if (source === "spc") return Response.json(await ingest("spc_reports", async () => [...await fetchSpcDay("today"), ...await fetchSpcDay("yesterday")]))
+    if (source === "spc") return Response.json(await ingest("spc_reports", async () => {
+      const pairs = await Promise.all(
+        (["today", "yesterday"] as const).flatMap((day) =>
+          (["hail", "wind", "torn"] as const).map((kind) => fetchSpcDay(day, kind))
+        ),
+      )
+      return pairs.flat()
+    }))
     return Response.json({ error: "source_must_be_nws_or_spc" }, { status: 400 })
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })

@@ -7,7 +7,7 @@ import sys
 from collections.abc import Callable
 
 from .normalize import normalize_snapshot
-from .sources import default_historical_year, fetch_ncei_hail_sample, fetch_nws_alerts, fetch_spc_hail
+from .sources import default_historical_year, fetch_ncei_hail_sample, fetch_nws_alerts, fetch_spc_reports
 from .supabase import SupabaseRest
 
 
@@ -32,10 +32,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.source in ("all", "nws"):
         collectors.append(("nws_alerts", fetch_nws_alerts))
     if args.source in ("all", "spc"):
-        collectors.extend([
-            ("spc_reports", lambda: fetch_spc_hail("today")),
-            ("spc_reports", lambda: fetch_spc_hail("yesterday")),
-        ])
+        collectors.extend(
+            ("spc_reports", lambda day=day, kind=kind: fetch_spc_reports(day, kind))
+            for day in ("today", "yesterday") for kind in ("hail", "wind", "torn")
+        )
     if args.source in ("all", "historical"):
         collectors.append((
             "noaa_storm_events",
