@@ -58,6 +58,8 @@ The endpoints are `POST /mcp` for JSON-RPC and `GET /health` for infrastructure 
 
 The canonical customer-facing MCP URL is `https://mcp.vectoros.co/mcp`. A minimal Cloudflare Worker in `cloudflare/storm-signal-mcp-gateway.js` proxies `/mcp` and `/health` to the Supabase Edge Function without storing credentials or changing MCP response headers. The native Supabase URL remains available as the backend and operational fallback.
 
+The MCP initialization metadata advertises the Storm Signal logo through `serverInfo.icons`. Cloudflare serves the same PNG at `/favicon.png` and `/favicon.ico`, keeping the icon on the same origin as required by cautious MCP clients.
+
 The server is stateless even though it issues session identifiers, so Cloud Run can safely use more than one instance. Each tool response includes a trace identifier, structured evidence, and explicit limitations. The location score is deterministic and never claims that a property was hit or damaged.
 
 Build locally with:

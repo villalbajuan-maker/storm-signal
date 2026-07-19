@@ -8,7 +8,18 @@ from typing import Any, Awaitable, Callable
 from .tools import TOOL_DEFINITIONS, StormSignalTools
 
 PROTOCOL_VERSION = "2025-11-25"
-SERVER_INFO = {"name": "storm-signal", "version": "0.1.0"}
+SERVER_INFO = {
+    "name": "storm-signal",
+    "title": "Storm Signal",
+    "version": "0.1.0",
+    "description": "Persistent severe-weather intelligence for operational analysis.",
+    "websiteUrl": "https://vectoros.co",
+    "icons": [{
+        "src": "https://mcp.vectoros.co/favicon.png",
+        "mimeType": "image/png",
+        "sizes": ["500x500"],
+    }],
+}
 
 
 class MCPApplication:

@@ -1,5 +1,16 @@
 const PROTOCOL_VERSION = "2025-11-25"
-const SERVER_INFO = { name: "storm-signal", version: "0.1.0" }
+const SERVER_INFO = {
+  name: "storm-signal",
+  title: "Storm Signal",
+  version: "0.1.0",
+  description: "Persistent severe-weather intelligence for operational analysis.",
+  websiteUrl: "https://vectoros.co",
+  icons: [{
+    src: "https://mcp.vectoros.co/favicon.png",
+    mimeType: "image/png",
+    sizes: ["500x500"],
+  }],
+}
 const EVENT_TYPES = ["hail_report", "severe_thunderstorm_warning", "tornado_warning", "wind_report", "tornado_report", "historical_hail_event"]
 const LIMITATIONS = [
   "Warnings describe forecast or warned areas; they do not prove hail at a property.",
