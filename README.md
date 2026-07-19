@@ -56,6 +56,8 @@ storm-mcp
 
 The endpoints are `POST /mcp` for JSON-RPC and `GET /health` for infrastructure health. `GET /mcp` deliberately returns 405 because this implementation does not open an SSE stream. The initialize response returns `Mcp-Session-Id`; CORS exposes that header for Claude's connector. Set `MCP_ALLOWED_ORIGINS` to a comma-separated production allowlist when the deployment's expected browser origins are known.
 
+The canonical customer-facing MCP URL is `https://mcp.vectoros.co/mcp`. A minimal Cloudflare Worker in `cloudflare/storm-signal-mcp-gateway.js` proxies `/mcp` and `/health` to the Supabase Edge Function without storing credentials or changing MCP response headers. The native Supabase URL remains available as the backend and operational fallback.
+
 The server is stateless even though it issues session identifiers, so Cloud Run can safely use more than one instance. Each tool response includes a trace identifier, structured evidence, and explicit limitations. The location score is deterministic and never claims that a property was hit or damaged.
 
 Build locally with:
