@@ -1,0 +1,59 @@
+name: Validate Storm Signal
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  code:
+    name: Python and Deno contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Python tests
+        env:
+          PYTHONPATH: src
+        run: python -m unittest discover -s tests -v
+      - name: Type-check Edge Functions
+        run: |
+          deno check supabase/functions/storm_signal_ingestor/index.ts
+          deno check supabase/functions/storm_signal_mcp/index.ts
+          deno check --config supabase/functions/storm_signal_nhc_ingestor/deno.json \
+            supabase/functions/storm_signal_nhc_ingestor/index.ts
+
+  migrations:
+    name: Migration replay and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start ephemeral Supabase
+        run: >-
+          supabase start -x
+          gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+      - name: Replay all migrations
+        run: supabase db reset --local
+      - name: Lint database
+        run: supabase db lint --local --schema public --level warning --fail-on error
+      - name: Stop ephemeral Supabase
+        if: always()
+        run: supabase stop --no-backup

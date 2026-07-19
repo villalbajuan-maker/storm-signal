@@ -11,6 +11,13 @@ declare
 begin
   lock table public.geographic_areas in share row exclusive mode;
 
+  -- A clean schema replay has no Census seed data. The destructive reduction
+  -- is only meaningful after the importer has populated geographic_areas.
+  if not exists (select 1 from public.geographic_areas) then
+    raise notice 'Geography reduction skipped: geographic_areas is empty';
+    return;
+  end if;
+
   create temporary table geography_reduction_candidates (
     id uuid primary key
   ) on commit drop;
