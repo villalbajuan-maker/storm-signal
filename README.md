@@ -1,6 +1,8 @@
-# Storm Signal data reconnaissance prototype
+# Storm Signal
 
-This proof of concept inspects—not yet normalizes or serves—three authoritative severe-weather sources. It downloads representative raw payloads, preserves provenance and hashes, and creates a field inventory showing the exact keys, observed types, nulls, missing values, and examples in each run.
+This proof of concept ingests, normalizes, persists, and serves evidence from three authoritative severe-weather sources. It preserves raw provenance and hashes while maintaining a queryable PostGIS interpretation of each event.
+
+It also includes a remote MCP server that exposes the persisted evidence through four read-only tools: `search_storm_events`, `get_storm_event`, `assess_location`, and `summarize_storm_activity`.
 
 ## Run it
 
@@ -40,6 +42,29 @@ PYTHONPATH=src python -m storm_signal_recon.ingest --source all
 Never commit the secret key. The ingestor uses it only from the process environment and sends modern `sb_secret_...` credentials solely in the `apikey` header. Legacy `SUPABASE_SERVICE_ROLE_KEY` remains a temporary fallback. Every source collection creates an `ingestion_runs` row, versions raw records by canonical payload hash, and upserts the current normalized event by source identity.
 
 The GitHub Actions workflow in `.github/workflows/ingest.yml` runs NWS every 5 minutes, SPC every 10 minutes, and the bounded Texas/Oklahoma historical refresh weekly. It requires repository secrets named `SUPABASE_URL` and `SUPABASE_SECRET_KEY`.
+
+## Run the MCP server
+
+Apply the latest migration and start the Streamable HTTP server with backend-only credentials:
+
+```bash
+supabase db push
+SUPABASE_URL=https://efzezjfvhkywxukluowh.supabase.co \
+SUPABASE_SECRET_KEY=sb_secret_... \
+storm-mcp
+```
+
+The endpoints are `POST /mcp` for JSON-RPC and `GET /health` for infrastructure health. `GET /mcp` deliberately returns 405 because this implementation does not open an SSE stream. The initialize response returns `Mcp-Session-Id`; CORS exposes that header for Claude's connector. Set `MCP_ALLOWED_ORIGINS` to a comma-separated production allowlist when the deployment's expected browser origins are known.
+
+The server is stateless even though it issues session identifiers, so Cloud Run can safely use more than one instance. Each tool response includes a trace identifier, structured evidence, and explicit limitations. The location score is deterministic and never claims that a property was hit or damaged.
+
+Build locally with:
+
+```bash
+docker build -t storm-signal-mcp .
+docker run --rm -p 8080:8080 \
+  -e SUPABASE_URL -e SUPABASE_SECRET_KEY storm-signal-mcp
+```
 
 ## What each source actually contributes
 

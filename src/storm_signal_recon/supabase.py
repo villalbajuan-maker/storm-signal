@@ -84,3 +84,7 @@ class SupabaseRest:
             return
         path = "/storm_events?on_conflict=source,source_record_id"
         self.request("POST", path, events, "resolution=merge-duplicates,return=minimal")
+
+    def rpc(self, function: str, parameters: dict[str, Any]) -> Any:
+        """Call a backend-only PostgREST function."""
+        return self.request("POST", f"/rpc/{function}", parameters)
