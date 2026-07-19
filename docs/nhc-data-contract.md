@@ -5,6 +5,8 @@
 **Initial operational scope:** Atlantic basin, including the Gulf and Atlantic coasts  
 **Authority:** NOAA National Hurricane Center (NHC)
 
+**Implementation status:** Phase 1 persistence schema deployed to Supabase on July 19, 2026. Live NHC ingestion remains intentionally inactive pending the archived-advisory importer tranche.
+
 ## 1. Promise
 
 Given an active NHC tropical cyclone or potential tropical cyclone, Storm Signal will preserve each official advisory and make its forecast track, operational cone, coastal watches/warnings and wind fields geographically queryable, with source lineage and issue/valid times.
