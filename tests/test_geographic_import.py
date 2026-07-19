@@ -7,6 +7,9 @@ class GeographicImportTests(unittest.TestCase):
     def test_louisiana_scope_uses_postal_abbreviation(self):
         self.assertEqual(STATE_ABBREVIATIONS["22"], "LA")
 
+    def test_oklahoma_scope_uses_postal_abbreviation(self):
+        self.assertEqual(STATE_ABBREVIATIONS["40"], "OK")
+
     def test_derives_state_bbox_with_padding(self):
         collection = {"features": [{"geometry": {"coordinates": [[[-106.0, 25.8], [-93.5, 36.5]]]}}]}
         self.assertEqual(geometry_bbox(collection), (-106.1, 25.7, -93.4, 36.6))
