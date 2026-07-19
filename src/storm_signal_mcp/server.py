@@ -83,7 +83,7 @@ class MCPApplication:
                 "protocolVersion": PROTOCOL_VERSION,
                 "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": SERVER_INFO,
-                "instructions": "Use persisted evidence conservatively. Commercial answers cover only Texas, Florida, Louisiana, Georgia, and North Carolina over the latest 14 days. Unlocated questions default to those states. Treat out_of_coverage as a coverage limitation, never as proof that no weather occurred. Never infer property impact or damage.",
+                "instructions": "Use persisted evidence conservatively. Commercial answers cover only Texas, Florida, Louisiana, Georgia, and North Carolina. Severe-event evidence covers the latest 14 days; NHC advisories remain a separate forecast domain. Unlocated questions default to those states. Treat out_of_coverage as a coverage limitation, never as proof that no weather occurred. Never infer property impact or damage.",
             }
             return {"jsonrpc": "2.0", "id": request_id, "result": result}, str(uuid.uuid4())
         if method == "ping":

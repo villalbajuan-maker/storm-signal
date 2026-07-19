@@ -44,14 +44,14 @@ No MCP query may expose an event outside the allowlist, including unlocated sear
 ## Implementation status
 
 - Tranche 1 complete: canonical allowlist, state/coordinate guards, SQL filtering, direct-event protection, 14-day clamp, and scoped data health.
-- Tranche 2 complete: all four MCP tools call the coverage guard, emit structured `in_coverage`, `out_of_coverage`, or `location_mismatch` status, include the five-state list, and disclose requested versus effective time windows. Tool descriptions and server instructions carry the same contract.
+- Tranche 2 complete: the original four severe-event MCP tools call the coverage guard, emit structured `in_coverage`, `out_of_coverage`, or `location_mismatch` status, include the five-state list, and disclose requested versus effective time windows. The fifth NHC tool uses the same territorial guard while retaining its separate forecast-time semantics. Tool descriptions and server instructions carry the same contract.
 - Live acceptance verified through `https://mcp.vectoros.co/mcp`: Colorado and an external `event_id` returned educational `out_of_coverage` results without tool errors or event payload exposure; an unlocated 30-day summary returned only FL, NC, and TX data present in the five-state scope and disclosed truncation to 14 days.
 
 ### Tranche 3 acceptance
 
 The repeatable public acceptance suite is `scripts/test_controlled_demo_mcp.py`. On 2026-07-19 it passed 17 of 17 checks against `https://mcp.vectoros.co`:
 
-- public health, initialization instructions, and the frozen four-tool catalog;
+- public health, initialization instructions, and the frozen five-tool catalog, including the dedicated NHC forecast-domain search;
 - unlocated search restricted to the five-state scope;
 - individual acceptance of TX, FL, LA, GA, and NC without cross-state leakage;
 - educational rejection of Colorado and Denver coordinates;

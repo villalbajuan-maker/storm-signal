@@ -2,7 +2,7 @@
 
 This proof of concept ingests, normalizes, persists, and serves evidence from three authoritative severe-weather sources. It preserves raw provenance and hashes while maintaining a queryable PostGIS interpretation of each event.
 
-It also includes a remote MCP server that exposes the persisted evidence through four read-only tools: `search_storm_events`, `get_storm_event`, `assess_location`, and `summarize_storm_activity`.
+It also includes a remote MCP server that exposes the persisted evidence through five read-only tools: `search_storm_events`, `get_storm_event`, `assess_location`, `summarize_storm_activity`, and `search_tropical_cyclones`.
 
 Product promise, frozen commercial outcomes, delivery order, and Gulf Coast expansion are governed by [the product and commercial roadmap](docs/product-commercial-roadmap.md).
 
@@ -65,6 +65,8 @@ limit 20;
 Every live NWS/SPC upsert now sends the exact created or updated event IDs through the versioned Census/PostGIS enrichment phase. Weather ingestion and derived geography have independent outcomes: a geographic failure is recorded in the same run without discarding successfully persisted source evidence.
 
 Every MCP tool response also includes `data_health`: national source freshness and ingestion outcomes, plus commercial event and geographic coverage for Texas, Florida, Louisiana, Georgia, and North Carolina over the latest 14 days. It also exposes Census vintage, method version, processing counts, queue health, and actionable alerts. This prevents an empty result from being presented as proof that no severe weather occurred when a source is stale, outside the controlled territory, or still awaiting geographic processing. Audited territorial counts are persisted in `geographic_coverage_summary` so MCP calls do not recalculate thousands of polygon intersections.
+
+`search_tropical_cyclones` exposes versioned NHC Atlantic advisories as a separate forecast domain. It searches analyzed centers, forecast track points, operational cones, coastal watches/warnings, and 34/50/64-kt wind fields only when their derived Census geography intersects the five-state controlled demo. `data_health.nhc` reports poll freshness, active systems, latest advisories, received product types, and geographic-processing gaps even when no NHC feature currently intersects the demo territory.
 
 Supabase cron is the intended operational scheduler. The legacy GitHub Actions workflow in `.github/workflows/ingest.yml` is still scheduled redundantly and includes an obsolete Texas/Oklahoma historical job; its consolidation into manual recovery-only mode is tracked as hygiene tranche 2. It requires repository secrets named `SUPABASE_URL` and `SUPABASE_SECRET_KEY` while it remains enabled.
 

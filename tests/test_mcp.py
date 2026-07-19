@@ -57,12 +57,13 @@ class MCPTransportTests(unittest.TestCase):
         self.assertIn("mcp-session-id", headers)
         self.assertEqual(headers["access-control-expose-headers"], "mcp-session-id")
 
-    def test_tools_list_is_exactly_the_frozen_four(self):
+    def test_tools_list_is_exactly_the_frozen_five(self):
         _, _, body = asyncio.run(request(self.app, "POST", "/mcp", {
             "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}
         }))
         self.assertEqual([t["name"] for t in body["result"]["tools"]], [
-            "search_storm_events", "get_storm_event", "assess_location", "summarize_storm_activity"
+            "search_storm_events", "get_storm_event", "assess_location",
+            "summarize_storm_activity", "search_tropical_cyclones",
         ])
 
     def test_notification_is_accepted_without_response_body(self):
@@ -193,6 +194,35 @@ class MCPToolTests(unittest.TestCase):
         self.assertEqual(params["p_county"], "Pondera County")
         self.assertEqual(params["p_place"], "Ledger")
         self.assertEqual(params["p_zcta"], "59425")
+
+    def test_tropical_search_preserves_forecast_semantics_and_filters(self):
+        evidence = [{
+            "cyclone": {"atcf_id": "AL112017", "name": "Irma"},
+            "feature": {"product_type": "operational_cone", "evidence_class": "uncertainty"},
+            "interpretation": "Within the cone means forecast-track uncertainty.",
+        }]
+        database = FakeDatabase({"mcp_search_tropical_cyclones_compact": evidence})
+        result = StormSignalTools(database).call("search_tropical_cyclones", {
+            "active_only": False, "state": "Florida",
+            "product_types": ["operational_cone"], "limit": 10,
+        })
+        self.assertEqual(result["evidence_domain"], "nhc_tropical_cyclone")
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["cyclones"][0]["feature"]["evidence_class"], "uncertainty")
+        self.assertTrue(any("not observations" in item for item in result["limitations"]))
+        params = next(parameters for name, parameters in database.calls if name == "mcp_search_tropical_cyclones_compact")
+        self.assertEqual(params["p_state"], "Florida")
+        self.assertFalse(params["p_active_only"])
+
+    def test_tropical_search_outside_coverage_does_not_query_evidence(self):
+        database = FakeDatabase({
+            "mcp_check_coverage": {"status": "out_of_coverage", "requested_state": "Colorado"},
+            "mcp_data_health": {"nhc": {"state": "active"}},
+        })
+        result = StormSignalTools(database).call("search_tropical_cyclones", {"state": "Colorado"})
+        self.assertEqual(result["status"], "out_of_coverage")
+        self.assertEqual(result["cyclones"], [])
+        self.assertFalse(any(name == "mcp_search_tropical_cyclones_compact" for name, _ in database.calls))
 
 
 if __name__ == "__main__":

@@ -12,12 +12,20 @@ const SERVER_INFO = {
   }],
 }
 const EVENT_TYPES = ["hail_report", "severe_thunderstorm_warning", "tornado_warning", "wind_report", "tornado_report", "historical_hail_event"]
+const NHC_PRODUCT_TYPES = ["analysis_center", "forecast_track_point", "forecast_track_line", "operational_cone", "experimental_cone", "watch_warning", "wind_radius", "wind_probability", "arrival_time", "storm_surge_watch_warning", "storm_surge_probability", "storm_surge_inundation"]
+const NHC_EVIDENCE_CLASSES = ["analysis", "forecast", "uncertainty", "watch_warning", "probability", "preliminary_observation", "final_historical"]
 const LIMITATIONS = [
   "Warnings describe forecast or warned areas; they do not prove hail at a property.",
   "SPC reports are preliminary observer points, not hail footprints, and may be corrected.",
   "SPC wind and tornado reports are preliminary observation points; unknown speed or scale is preserved rather than inferred.",
   "Historical coordinates can be approximate or absent.",
   "This evidence does not establish property damage, roof condition, or sales qualification.",
+]
+const NHC_LIMITATIONS = [
+  "NHC forecasts describe future conditions and remain forecasts after their valid time; they are not observations.",
+  "The cone describes probable center-track uncertainty, not storm size or an impact footprint.",
+  "Wind-radius polygons are maximum extents by threshold and quadrant; wind is not uniform inside them.",
+  "A Census intersection indicates geographic overlap only, not property impact, damage, a lead, or a claim.",
 ]
 const COVERAGE_MESSAGE = "This location is not yet part of Storm Signal's controlled demo coverage. We currently provide commercial analysis for Texas, Florida, Louisiana, Georgia, and North Carolina. Coverage for additional states is coming soon."
 const IN_COVERAGE_MESSAGE = "This request is within Storm Signal's controlled demo coverage for Texas, Florida, Louisiana, Georgia, and North Carolina."
@@ -72,6 +80,20 @@ const TOOLS = [
     }, ["start_at", "end_at"]),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
+  {
+    name: "search_tropical_cyclones",
+    description: "Search versioned NHC Atlantic cyclone advisories, tracks, operational cones, watches/warnings, and 34/50/64-kt wind fields that intersect TX, FL, LA, GA, or NC. Results preserve forecast and uncertainty semantics.",
+    inputSchema: schema({
+      active_only: { type: "boolean", default: true }, atcf_id: { type: "string", pattern: "^[A-Za-z]{2}[0-9]{6}$" },
+      issued_after: { type: "string", format: "date-time" }, issued_before: { type: "string", format: "date-time" },
+      product_types: { type: "array", items: { type: "string", enum: NHC_PRODUCT_TYPES } },
+      evidence_classes: { type: "array", items: { type: "string", enum: NHC_EVIDENCE_CLASSES } },
+      state: { type: "string" }, county: { type: "string" }, place: { type: "string" },
+      zcta: { type: "string", pattern: "^[0-9]{5}$" }, valid_at: { type: "string", format: "date-time" },
+      limit: { type: "integer", minimum: 1, maximum: 200, default: 50 },
+    }),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
 ]
 
 const cors = {
@@ -101,6 +123,16 @@ function searchParams(a: Args) {
   }
 }
 
+function tropicalParams(a: Args) {
+  return {
+    p_active_only: a.active_only ?? true, p_atcf_id: a.atcf_id ?? null,
+    p_issued_after: a.issued_after ?? null, p_issued_before: a.issued_before ?? null,
+    p_product_types: a.product_types ?? null, p_evidence_classes: a.evidence_classes ?? null,
+    p_state: a.state ?? null, p_county: a.county ?? null, p_place: a.place ?? null,
+    p_zcta: a.zcta ?? null, p_valid_at: a.valid_at ?? null, p_limit: a.limit ?? 50,
+  }
+}
+
 function validate(name: string, a: Args) {
   if (!TOOLS.some((tool) => tool.name === name)) throw new Error(`Unknown tool: ${name}`)
   if (name === "get_storm_event" && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(a.event_id ?? ""))) throw new Error("event_id must be a UUID")
@@ -108,6 +140,13 @@ function validate(name: string, a: Args) {
     if (!a.start_at || !a.end_at) throw new Error("start_at and end_at are required")
     if (Number.isNaN(Date.parse(String(a.start_at))) || Number.isNaN(Date.parse(String(a.end_at)))) throw new Error("Invalid date-time")
     if (Date.parse(String(a.start_at)) > Date.parse(String(a.end_at))) throw new Error("start_at must be before end_at")
+  }
+  if (name === "search_tropical_cyclones") {
+    for (const key of ["issued_after", "issued_before", "valid_at"]) {
+      if (a[key] !== undefined && Number.isNaN(Date.parse(String(a[key])))) throw new Error(`${key} must be a valid date-time`)
+    }
+    if (a.issued_after && a.issued_before && Date.parse(String(a.issued_after)) > Date.parse(String(a.issued_before))) throw new Error("issued_after must be before issued_before")
+    if (a.atcf_id !== undefined && !/^[A-Za-z]{2}[0-9]{6}$/.test(String(a.atcf_id))) throw new Error("atcf_id must use the ATCF format, for example AL012026")
   }
   const hasLat = a.latitude !== undefined, hasLon = a.longitude !== undefined
   if (hasLat !== hasLon) throw new Error("latitude and longitude must be provided together")
@@ -166,6 +205,14 @@ function unavailable(trace_id: string, generated_at: string, data_health: any, c
   }
 }
 
+function tropicalUnavailable(trace_id: string, generated_at: string, data_health: any, coverage: any) {
+  return {
+    trace_id, generated_at, status: coverage?.status ?? "out_of_coverage",
+    message: COVERAGE_MESSAGE, coverage, data_health, cyclones: [], count: 0,
+    evidence_domain: "nhc_tropical_cyclone", limitations: NHC_LIMITATIONS,
+  }
+}
+
 function presentCoverage(value: any) {
   return { ...value, message: value?.status === "in_coverage" ? IN_COVERAGE_MESSAGE : COVERAGE_MESSAGE }
 }
@@ -174,7 +221,7 @@ async function callTool(name: string, a: Args) {
   validate(name, a)
   const trace_id = crypto.randomUUID(), generated_at = new Date().toISOString()
   const data_health = await rpc("mcp_data_health", {})
-  const window = effectiveWindow(a)
+  const window = name === "search_tropical_cyclones" ? null : effectiveWindow(a)
   if (name === "get_storm_event") {
     const coverage = presentCoverage(await rpc("mcp_check_event_coverage", { p_event_id: a.event_id }))
     if (coverage?.status === "not_found") throw new Error("Storm event not found")
@@ -187,7 +234,9 @@ async function callTool(name: string, a: Args) {
   const coverage = presentCoverage(await rpc("mcp_check_coverage", {
     p_state: a.state ?? null, p_lat: a.latitude ?? null, p_lon: a.longitude ?? null,
   }))
-  if (coverage?.status !== "in_coverage") return unavailable(trace_id, generated_at, data_health, coverage, window)
+  if (coverage?.status !== "in_coverage") return name === "search_tropical_cyclones"
+    ? tropicalUnavailable(trace_id, generated_at, data_health, coverage)
+    : unavailable(trace_id, generated_at, data_health, coverage, window)
   if (name === "search_storm_events") {
     const events = await rpc("mcp_search_storm_events", searchParams({ ...a, radius_miles: a.radius_miles ?? (a.latitude !== undefined ? 10 : null) })) ?? []
     return { trace_id, generated_at, status: "in_coverage", coverage, window, data_health, events, count: events.length, limitations: LIMITATIONS }
@@ -195,6 +244,14 @@ async function callTool(name: string, a: Args) {
   if (name === "summarize_storm_activity") {
     const groups = await rpc("mcp_summarize_storm_activity", { p_start_at: a.start_at, p_end_at: a.end_at, p_group_by: a.group_by ?? "event_type", p_state: a.state ?? null, p_event_types: a.event_types ?? null }) ?? []
     return { trace_id, generated_at, status: "in_coverage", coverage, window, data_health, groups, group_by: a.group_by ?? "event_type", limitations: LIMITATIONS }
+  }
+  if (name === "search_tropical_cyclones") {
+    const cyclones = await rpc("mcp_search_tropical_cyclones_compact", tropicalParams(a)) ?? []
+    return {
+      trace_id, generated_at, status: "in_coverage", coverage, data_health,
+      cyclones, count: cyclones.length, evidence_domain: "nhc_tropical_cyclone",
+      limitations: NHC_LIMITATIONS,
+    }
   }
   const radius = Number(a.radius_miles ?? 10)
   const events = await rpc("mcp_search_storm_events", searchParams({ ...a, radius_miles: radius, limit: 200 })) ?? []
@@ -234,7 +291,7 @@ Deno.serve(async (req) => {
   if (message.method === "initialize") return response({
     jsonrpc: "2.0", id: message.id, result: {
       protocolVersion: PROTOCOL_VERSION, capabilities: { tools: { listChanged: false } }, serverInfo: SERVER_INFO,
-      instructions: "Use persisted weather evidence conservatively. Commercial answers are limited to Texas, Florida, Louisiana, Georgia, and North Carolina over the latest 14 days. Unlocated questions default to those five states. Treat out_of_coverage as a coverage limitation, never as proof that no weather occurred. Never infer property impact or damage.",
+      instructions: "Use persisted weather evidence conservatively. Commercial answers are limited to Texas, Florida, Louisiana, Georgia, and North Carolina. Severe-event evidence is limited to the latest 14 days; NHC advisories remain an explicitly separate forecast domain. Unlocated questions default to those five states. Treat out_of_coverage as a coverage limitation, never as proof that no weather occurred. Never infer property impact or damage.",
     },
   }, 200, { "Mcp-Session-Id": crypto.randomUUID() })
   if (message.method === "ping") return response({ jsonrpc: "2.0", id: message.id, result: {} })

@@ -5,7 +5,7 @@
 **Initial operational scope:** Atlantic basin, including the Gulf and Atlantic coasts  
 **Authority:** NOAA National Hurricane Center (NHC)
 
-**Implementation status:** Persistence, archived replay, Census/PostGIS enrichment and live Atlantic ingestion completed in Supabase on July 19, 2026. Hurricane Irma `AL112017` advisory 20 remains the deterministic fixture. The production Edge Function polls official Atlantic RSS plus `CurrentStorms.json`, processes available GIS ZIP assets, enriches each geometry independently and runs every five minutes. Its first automatic production run persisted active system `AL022026` advisory `001A` with 21 typed features. MCP exposure and NHC-specific health remain the final tranche.
+**Implementation status:** Persistence, archived replay, Census/PostGIS enrichment, live Atlantic ingestion, dedicated MCP search and NHC-specific health completed in Supabase on July 19, 2026. Hurricane Irma `AL112017` advisory 20 remains the deterministic fixture. The production Edge Function polls official Atlantic RSS plus `CurrentStorms.json`, processes available GIS ZIP assets, enriches each geometry independently and runs every five minutes. Its first automatic production run persisted active system `AL022026` advisory `001A` with 21 typed features.
 
 ## 1. Promise
 

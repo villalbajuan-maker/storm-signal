@@ -51,6 +51,7 @@ def main() -> int:
     tools = rpc("tools/list", {}, 2)["result"]["tools"]
     require({tool["name"] for tool in tools} == {
         "search_storm_events", "get_storm_event", "assess_location", "summarize_storm_activity",
+        "search_tropical_cyclones",
     }, "public tool catalog changed")
     checks.append("tools_list")
 
@@ -80,10 +81,27 @@ def main() -> int:
     require({group.get("group") for group in summary.get("groups", [])} <= COVERED, "summary leaked a state")
     checks.append("window_and_summary_scope")
 
+    tropical, error = call("search_tropical_cyclones", {"active_only": True}, 7)
+    require(not error and tropical.get("status") == "in_coverage", "default NHC search failed")
+    require(tropical.get("evidence_domain") == "nhc_tropical_cyclone", "NHC evidence domain missing")
+    require(tropical.get("data_health", {}).get("nhc", {}).get("state") in {
+        "active", "seasonally_empty", "degraded", "failed",
+    }, "NHC health state missing")
+    if tropical.get("cyclones"):
+        geography = tropical["cyclones"][0].get("geography", {})
+        require("total_area_count" in geography and "areas" in geography, "compact NHC geography missing")
+        require(len(geography["areas"]) <= 40, "NHC geography sample is unbounded")
+    checks.append("nhc_default_scope")
+
+    tropical_colorado, error = call("search_tropical_cyclones", {"state": "Colorado"}, 8)
+    require(not error and tropical_colorado.get("status") == "out_of_coverage", "NHC Colorado guard failed")
+    require(tropical_colorado.get("cyclones") == [], "NHC out-of-coverage result leaked evidence")
+    checks.append("nhc_unsupported_state")
+
     # Weather can be quiet. Exercise detail only when a covered event exists.
     if search.get("events"):
         event_id = search["events"][0]["id"]
-        detail, error = call("get_storm_event", {"event_id": event_id}, 7)
+        detail, error = call("get_storm_event", {"event_id": event_id}, 9)
         require(not error and detail.get("status") == "in_coverage", "covered detail failed")
         require(detail.get("event", {}).get("id") == event_id, "detail continuity failed")
         checks.append("search_to_detail")

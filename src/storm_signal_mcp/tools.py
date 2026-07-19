@@ -11,6 +11,16 @@ EVENT_TYPES = [
     "hail_report", "severe_thunderstorm_warning", "tornado_warning",
     "wind_report", "tornado_report", "historical_hail_event",
 ]
+NHC_PRODUCT_TYPES = [
+    "analysis_center", "forecast_track_point", "forecast_track_line",
+    "operational_cone", "experimental_cone", "watch_warning", "wind_radius",
+    "wind_probability", "arrival_time", "storm_surge_watch_warning",
+    "storm_surge_probability", "storm_surge_inundation",
+]
+NHC_EVIDENCE_CLASSES = [
+    "analysis", "forecast", "uncertainty", "watch_warning", "probability",
+    "preliminary_observation", "final_historical",
+]
 COVERAGE_MESSAGE = "This location is not yet part of Storm Signal's controlled demo coverage. We currently provide commercial analysis for Texas, Florida, Louisiana, Georgia, and North Carolina. Coverage for additional states is coming soon."
 IN_COVERAGE_MESSAGE = "This request is within Storm Signal's controlled demo coverage for Texas, Florida, Louisiana, Georgia, and North Carolina."
 WINDOW_DAYS = 14
@@ -72,6 +82,23 @@ TOOL_DEFINITIONS = [
         }, ["start_at", "end_at"]),
         "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     },
+    {
+        "name": "search_tropical_cyclones",
+        "description": "Search versioned NHC Atlantic cyclone advisories, tracks, operational cones, watches/warnings, and 34/50/64-kt wind fields that intersect TX, FL, LA, GA, or NC.",
+        "inputSchema": _schema({
+            "active_only": {"type": "boolean", "default": True},
+            "atcf_id": {"type": "string", "pattern": "^[A-Za-z]{2}[0-9]{6}$"},
+            "issued_after": {"type": "string", "format": "date-time"},
+            "issued_before": {"type": "string", "format": "date-time"},
+            "product_types": {"type": "array", "items": {"type": "string", "enum": NHC_PRODUCT_TYPES}},
+            "evidence_classes": {"type": "array", "items": {"type": "string", "enum": NHC_EVIDENCE_CLASSES}},
+            "state": {"type": "string"}, "county": {"type": "string"},
+            "place": {"type": "string"}, "zcta": {"type": "string", "pattern": "^[0-9]{5}$"},
+            "valid_at": {"type": "string", "format": "date-time"},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50},
+        }),
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    },
 ]
 
 
@@ -112,7 +139,7 @@ class StormSignalTools:
             "p_state": arguments.get("state"), "p_lat": arguments.get("latitude"), "p_lon": arguments.get("longitude"),
         }))
         if coverage.get("status") != "in_coverage":
-            result = self._unavailable(coverage, window)
+            result = self._tropical_unavailable(coverage) if name == "search_tropical_cyclones" else self._unavailable(coverage, window)
             return {"trace_id": trace_id, "generated_at": datetime.now(timezone.utc).isoformat(), "data_health": data_health, **result}
         if name == "search_storm_events":
             data = self.database.rpc("mcp_search_storm_events", self._search_params(arguments))
@@ -126,6 +153,14 @@ class StormSignalTools:
             result = {"status": "in_coverage", "coverage": coverage, "window": window, "groups": data or [], "group_by": arguments.get("group_by", "event_type"), "limitations": self._limitations()}
         elif name == "assess_location":
             result = {"status": "in_coverage", "coverage": coverage, **self._assess(arguments)}
+        elif name == "search_tropical_cyclones":
+            data = self.database.rpc("mcp_search_tropical_cyclones_compact", self._tropical_params(arguments))
+            result = {
+                "status": "in_coverage", "coverage": coverage,
+                "cyclones": data or [], "count": len(data or []),
+                "evidence_domain": "nhc_tropical_cyclone",
+                "limitations": self._nhc_limitations(),
+            }
         else:
             raise ValueError(f"Unknown tool: {name}")
         return {
@@ -188,6 +223,15 @@ class StormSignalTools:
         return {"status": coverage.get("status", "out_of_coverage"), "message": COVERAGE_MESSAGE, "coverage": coverage, "window": window, "events": [], "count": 0, "limitations": StormSignalTools._limitations()}
 
     @staticmethod
+    def _tropical_unavailable(coverage: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "status": coverage.get("status", "out_of_coverage"), "message": COVERAGE_MESSAGE,
+            "coverage": coverage, "cyclones": [], "count": 0,
+            "evidence_domain": "nhc_tropical_cyclone",
+            "limitations": StormSignalTools._nhc_limitations(),
+        }
+
+    @staticmethod
     def _search_params(a: dict[str, Any]) -> dict[str, Any]:
         return {
             "p_start_at": a.get("start_at"), "p_end_at": a.get("end_at"),
@@ -196,6 +240,17 @@ class StormSignalTools:
             "p_min_hail_inches": a.get("min_hail_inches"),
             "p_status": a.get("status"), "p_lat": a.get("latitude"), "p_lon": a.get("longitude"),
             "p_radius_miles": a.get("radius_miles"), "p_limit": a.get("limit", 50),
+        }
+
+    @staticmethod
+    def _tropical_params(a: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "p_active_only": a.get("active_only", True), "p_atcf_id": a.get("atcf_id"),
+            "p_issued_after": a.get("issued_after"), "p_issued_before": a.get("issued_before"),
+            "p_product_types": a.get("product_types"), "p_evidence_classes": a.get("evidence_classes"),
+            "p_state": a.get("state"), "p_county": a.get("county"),
+            "p_place": a.get("place"), "p_zcta": a.get("zcta"),
+            "p_valid_at": a.get("valid_at"), "p_limit": a.get("limit", 50),
         }
 
     @staticmethod
@@ -226,6 +281,16 @@ class StormSignalTools:
             if a["start_at"] > a["end_at"]: raise ValueError("start_at must be before end_at")
         if name == "get_storm_event":
             uuid.UUID(str(a.get("event_id", "")))
+        if name == "search_tropical_cyclones":
+            for key in ("issued_after", "issued_before", "valid_at"):
+                if a.get(key): datetime.fromisoformat(str(a[key]).replace("Z", "+00:00"))
+            if a.get("issued_after") and a.get("issued_before"):
+                after = datetime.fromisoformat(str(a["issued_after"]).replace("Z", "+00:00"))
+                before = datetime.fromisoformat(str(a["issued_before"]).replace("Z", "+00:00"))
+                if after > before: raise ValueError("issued_after must be before issued_before")
+            atcf_id = str(a.get("atcf_id", ""))
+            if atcf_id and (len(atcf_id) != 8 or not atcf_id[:2].isalpha() or not atcf_id[2:].isdigit()):
+                raise ValueError("atcf_id must use the ATCF format, for example AL012026")
         coords = (a.get("latitude"), a.get("longitude"))
         if (coords[0] is None) != (coords[1] is None):
             raise ValueError("latitude and longitude must be provided together")
@@ -242,4 +307,13 @@ class StormSignalTools:
             "SPC wind and tornado reports are preliminary observation points; unknown speed or scale is preserved rather than inferred.",
             "Historical coordinates can be approximate or absent.",
             "This evidence does not establish property damage, roof condition, or sales qualification.",
+        ]
+
+    @staticmethod
+    def _nhc_limitations() -> list[str]:
+        return [
+            "NHC forecasts describe future conditions and remain forecasts after their valid time; they are not observations.",
+            "The cone describes probable center-track uncertainty, not storm size or an impact footprint.",
+            "Wind-radius polygons are maximum extents by threshold and quadrant; wind is not uniform inside them.",
+            "A Census intersection indicates geographic overlap only, not property impact, damage, a lead, or a claim.",
         ]

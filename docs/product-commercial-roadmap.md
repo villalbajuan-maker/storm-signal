@@ -52,7 +52,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 - Observed SPC hail, wind and tornado reports.
 - NWS severe-thunderstorm and tornado warning evidence.
 - Historical NOAA Storm Events hail evidence.
-- Four read-only MCP tools: `search_storm_events`, `get_storm_event`, `assess_location`, and `summarize_storm_activity`.
+- Five read-only MCP tools: `search_storm_events`, `get_storm_event`, `assess_location`, `summarize_storm_activity`, and `search_tropical_cyclones`.
 - Census/PostGIS state, county, place and ZCTA enrichment.
 - Audited Census/PostGIS coverage for the controlled demo: Texas, Florida, Louisiana, Georgia, and North Carolina.
 - National NWS/SPC ingestion with commercial MCP answers limited to those five states and the latest 14 days.
@@ -60,7 +60,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 
 ### Partially delivered
 
-- **Find the signal:** operational for current event types within the five-state controlled-demo geography; NHC evidence is persisted but not yet exposed through the MCP.
+- **Find the signal:** operational for current severe-event types and versioned NHC tropical-cyclone evidence within the five-state controlled-demo geography.
 - **Rank the markets:** an evidence score exists for a location, but a market-level commercial ranking contract is not yet complete.
 - **Build the field plan:** conversational design is defined; structured plan entities and generation are not yet implemented.
 - **Share the brief:** templates and output requirements are defined; production document generation and workspace persistence are not yet implemented.
@@ -94,7 +94,7 @@ Commercial outcome strengthened: **Find the signal**.
 
 Integrate hazards in an evidence-aware sequence:
 
-The NHC persistence and evidence contract is frozen in [`nhc-data-contract.md`](nhc-data-contract.md); its four architecture decisions were approved on July 19, 2026. Supabase persistence, archived replay, Census/PostGIS enrichment and five-minute live Atlantic ingestion were completed on the same date. The next bounded tranche is MCP search plus NHC observability.
+The NHC persistence and evidence contract is frozen in [`nhc-data-contract.md`](nhc-data-contract.md); its four architecture decisions were approved on July 19, 2026. Supabase persistence, archived replay, Census/PostGIS enrichment, five-minute live Atlantic ingestion, MCP search, and NHC observability were completed on the same date.
 
 1. Active NHC cyclone advisories, tracks, cones, watches and warnings.
 2. NHC 34-, 50- and 64-knot wind fields and wind-speed probabilities.
