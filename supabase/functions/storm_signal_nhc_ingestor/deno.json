@@ -1,0 +1,6 @@
+{
+  "nodeModulesDir": "auto",
+  "imports": {
+    "shpjs": "npm:shpjs@6.2.0"
+  }
+}
