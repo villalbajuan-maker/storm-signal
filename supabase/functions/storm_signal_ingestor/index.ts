@@ -151,15 +151,40 @@ async function ingest(source: "nws_alerts" | "spc_reports", collect: () => Promi
     })
     const ids = new Map(rawRows.map((row) => [`${row.source}|${row.source_record_id}|${row.payload_hash}`, row.id]))
     const events: Row[] = pairs.map((pair) => ({ ...pair.event, raw_record_id: ids.get(`${pair.raw.source}|${pair.raw.source_record_id}|${pair.raw.payload_hash}`) }))
-    if (events.length) await rest("/storm_events?on_conflict=source,source_record_id", {
-      method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(events),
+    let persistedEvents: Row[] = []
+    if (events.length) persistedEvents = await rest("/storm_events?on_conflict=source,source_record_id&select=id", {
+      method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(events),
     })
     const created = events.filter((event) => !existing.has(event.source_record_id)).length
+    let geography: Row = {
+      status: "complete", selected_events: 0, associations: 0,
+      complete: 0, partial: 0, insufficient_geometry: 0,
+    }
+    try {
+      if (persistedEvents.length) {
+        const result = await rest("/rpc/enrich_ingested_storm_events", {
+          method: "POST",
+          body: JSON.stringify({ p_event_ids: persistedEvents.map((event) => event.id) }),
+        })
+        const incomplete = Number(result?.partial ?? 0) + Number(result?.insufficient_geometry ?? 0)
+        geography = { ...result, status: incomplete > 0 ? "partial" : "complete" }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+      geography = {
+        status: "failed", selected_events: 0, associations: 0,
+        complete: 0, partial: 0, insufficient_geometry: 0, error: message.slice(0, 1000),
+      }
+    }
     await rest(`/ingestion_runs?id=eq.${run.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({
       status: "complete", completed_at: new Date().toISOString(), records_received: events.length,
       records_created: created, records_updated: events.length - created,
+      geographic_status: geography.status,
+      geographic_events_processed: geography.selected_events ?? 0,
+      geographic_associations: geography.associations ?? 0,
+      geographic_error_message: geography.error ?? null,
     }) })
-    return { source, status: "complete", received: events.length, created, updated: events.length - created }
+    return { source, status: "complete", received: events.length, created, updated: events.length - created, geography }
   } catch (error) {
     const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
     await rest(`/ingestion_runs?id=eq.${run.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({

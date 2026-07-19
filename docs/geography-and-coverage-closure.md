@@ -181,3 +181,16 @@ El 19 de julio de 2026 se desplegó `backfill_unprocessed_storm_event_geographie
 - La operación con arreglo vacío permanece acotada y nunca se interpreta como reprocesamiento de todos los eventos.
 
 La aparición de eventos entre dos ejecuciones confirma la necesidad del Tramo 2: encadenar el enriquecimiento automáticamente a la ingesta.
+
+### Tramo 2 — Automatización: completado
+
+El 19 de julio de 2026 la Edge Function de ingesta quedó enlazada con `enrich_ingested_storm_events` para procesar los IDs exactos creados o actualizados en cada corrida NWS/SPC.
+
+- El resultado meteorológico y el geográfico son independientes: una falla derivada queda registrada sin descartar evidencia fuente persistida correctamente.
+- `ingestion_runs` registra `geographic_status`, eventos procesados, asociaciones y mensaje de error.
+- Primera ejecución real de `pg_cron` después del despliegue: NWS recibió y enriqueció 4 eventos, produjo 30 asociaciones y no registró error.
+- Prueba operativa SPC de volumen: 472 eventos enriquecidos, 194 asociaciones y ningún error geográfico.
+- El subestado `partial` es esperado cuando una corrida contiene eventos fuera de los 12 estados; describe cobertura, no una falla del proceso.
+- Corte de cierre: 1.488 eventos persistidos y 0 eventos sin procesamiento geográfico.
+
+La Edge Function desplegada conserva el cron NWS de 5 minutos y el cron SPC de 10 minutos. El siguiente trabajo es el Tramo 3: exponer esta observabilidad de forma consolidada en `data_health`.

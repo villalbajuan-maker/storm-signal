@@ -54,11 +54,15 @@ The Edge Function accepts only `POST` requests with `{"source":"nws"}` or `{"sou
 
 ```sql
 select source, status, started_at, completed_at,
-       records_received, records_created, records_updated, error_message
+       records_received, records_created, records_updated, error_message,
+       geographic_status, geographic_events_processed,
+       geographic_associations, geographic_error_message
 from public.ingestion_runs
 order by started_at desc
 limit 20;
 ```
+
+Every live NWS/SPC upsert now sends the exact created or updated event IDs through the versioned Census/PostGIS enrichment phase. Weather ingestion and derived geography have independent outcomes: a geographic failure is recorded in the same run without discarding successfully persisted source evidence.
 
 Every MCP tool response also includes `data_health`: source freshness, the latest ingestion outcome, and current geographic/time coverage. This prevents an empty result from being presented as proof that no severe weather occurred when the relevant source is stale or has not been ingested.
 
