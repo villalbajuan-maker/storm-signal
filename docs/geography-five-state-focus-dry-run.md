@@ -58,4 +58,4 @@ Los 18 eventos no se borrarían: únicamente quedarían sin asociación geográf
 
 ## Puerta de control
 
-Tramos 1 y 2 están completos. El siguiente paso autorizado debe ser únicamente el tramo 3: generar y verificar un respaldo lógico de las 11,485 áreas candidatas, junto con sus asociaciones. Todavía no existe autorización para eliminar geografía, limpiar asociaciones ni compactar la base.
+Tramos 1, 2 y 3 están completos. El tramo 3 generó una instantánea lógica completa de los datos públicos, que incluye las 22,251 geografías y sus asociaciones, en `backups/geography-2026-07-19-pre-reduction-full/public-data.sql.gz`. El archivo local comprimido ocupa 368 MB y pasó verificación de integridad gzip y SHA-256. Todavía no existe autorización ejecutada para eliminar geografía, limpiar asociaciones ni compactar la base.
