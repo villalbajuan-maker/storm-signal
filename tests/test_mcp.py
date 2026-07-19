@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from storm_signal_mcp.server import MCPApplication, PROTOCOL_VERSION
 from storm_signal_mcp.tools import StormSignalTools
@@ -138,10 +139,58 @@ class MCPToolTests(unittest.TestCase):
             "start_at": "2026-07-18T00:00:00Z", "end_at": "2026-07-19T23:59:59Z",
             "radius_miles": 10,
         })
-        self.assertEqual(result["score"], 95)
-        self.assertEqual(result["classification"], "strong")
+        self.assertEqual(result["score"], 56)
+        self.assertEqual(result["classification"], "moderate")
+        self.assertEqual(result["methodology"]["id"], "storm-signal-location-multihazard-v1")
+        self.assertEqual(result["components"]["severity"]["score"], 16)
         self.assertEqual(len(result["evidence"]["historical_hail_events"]), 1)
         self.assertTrue(any("does not establish property damage" in item for item in result["limitations"]))
+
+    def test_multihazard_assessment_scores_hail_wind_and_tornado(self):
+        recent = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        events = [
+            {"id": "h", "event_type": "hail_report", "distance_miles": 2, "magnitude": 1.75, "started_at": recent},
+            {"id": "w", "event_type": "wind_report", "distance_miles": 4, "magnitude": 80, "started_at": recent},
+            {"id": "t", "event_type": "tornado_report", "distance_miles": 5, "magnitude": None, "started_at": recent},
+            {"id": "tw", "event_type": "tornado_warning", "distance_miles": 8, "started_at": recent},
+        ]
+        health = {"sources": [
+            {"source": "spc_reports", "freshness_status": "fresh"},
+            {"source": "nws_alerts", "freshness_status": "fresh"},
+        ], "geography": {"event_processing": {"pending": 0}}}
+        result = StormSignalTools(FakeDatabase({
+            "mcp_search_storm_events": events, "mcp_data_health": health,
+        })).call("assess_location", {
+            "latitude": 30.2672, "longitude": -97.7431,
+            "start_at": recent, "end_at": datetime.now(timezone.utc).isoformat(), "radius_miles": 10,
+        })
+        self.assertEqual(result["score"], 97)
+        self.assertEqual(result["support_level"], "strong")
+        self.assertEqual(result["hazards"]["wind"]["max_mph"], 80)
+        self.assertEqual(result["hazards"]["tornado"]["report_count"], 1)
+        self.assertEqual(result["components"]["evidence_concentration"]["score"], 17)
+        self.assertEqual(result["methodology"]["penalty_points"], 0)
+
+    def test_multihazard_assessment_penalizes_degraded_inputs(self):
+        recent = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        health = {"sources": [
+            {"source": "spc_reports", "freshness_status": "stale"},
+            {"source": "nws_alerts", "freshness_status": "unhealthy"},
+        ], "geography": {"event_processing": {"pending": 2}}}
+        result = StormSignalTools(FakeDatabase({
+            "mcp_search_storm_events": [{
+                "id": "warning", "event_type": "severe_thunderstorm_warning",
+                "distance_miles": 3, "started_at": recent,
+            }],
+            "mcp_data_health": health,
+        })).call("assess_location", {
+            "latitude": 30.2672, "longitude": -97.7431,
+            "start_at": recent, "end_at": datetime.now(timezone.utc).isoformat(), "radius_miles": 10,
+        })
+        self.assertEqual(result["methodology"]["penalty_points"], 20)
+        self.assertEqual(result["score"], 5)
+        self.assertEqual(result["support_level"], "insufficient")
+        self.assertEqual(len(result["missing_data"]), 3)
 
     def test_tool_response_exposes_data_freshness_and_coverage(self):
         health = {

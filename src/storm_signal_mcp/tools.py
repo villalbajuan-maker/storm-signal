@@ -60,7 +60,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "name": "assess_location",
-        "description": "Produce a deterministic evidence score for a covered location in TX, FL, LA, GA, or NC over the available 14-day window.",
+        "description": "Produce a deterministic multihazard support score for hail, wind, tornado, and warning evidence near a covered location over the available 14-day window. NHC forecasts remain separate context.",
         "inputSchema": _schema({
             "latitude": {"type": "number", "minimum": -90, "maximum": 90},
             "longitude": {"type": "number", "minimum": -180, "maximum": 180},
@@ -152,7 +152,7 @@ class StormSignalTools:
             })
             result = {"status": "in_coverage", "coverage": coverage, "window": window, "groups": data or [], "group_by": arguments.get("group_by", "event_type"), "limitations": self._limitations()}
         elif name == "assess_location":
-            result = {"status": "in_coverage", "coverage": coverage, **self._assess(arguments)}
+            result = {"status": "in_coverage", "coverage": coverage, **self._assess(arguments, data_health)}
         elif name == "search_tropical_cyclones":
             data = self.database.rpc("mcp_search_tropical_cyclones_compact", self._tropical_params(arguments))
             result = {
@@ -170,30 +170,82 @@ class StormSignalTools:
             **result,
         }
 
-    def _assess(self, a: dict[str, Any]) -> dict[str, Any]:
+    def _assess(self, a: dict[str, Any], data_health: dict[str, Any]) -> dict[str, Any]:
         radius = float(a.get("radius_miles", 10))
         events = self.database.rpc("mcp_search_storm_events", self._search_params({**a, "limit": 200})) or []
-        reports = [e for e in events if e["event_type"] == "hail_report"]
-        warnings = [e for e in events if e["event_type"] in ("severe_thunderstorm_warning", "tornado_warning")]
+        hail = [e for e in events if e["event_type"] == "hail_report"]
+        wind = [e for e in events if e["event_type"] == "wind_report"]
+        tornado = [e for e in events if e["event_type"] == "tornado_report"]
+        severe_warnings = [e for e in events if e["event_type"] == "severe_thunderstorm_warning"]
+        tornado_warnings = [e for e in events if e["event_type"] == "tornado_warning"]
+        warnings = severe_warnings + tornado_warnings
         historical = [e for e in events if e["event_type"] == "historical_hail_event"]
-        score, reasons = 0, []
-        if warnings:
-            score += 15; reasons.append({"points": 15, "reason": "warning evidence in the search radius"})
-        if reports:
-            score += 30; reasons.append({"points": 30, "reason": "preliminary hail report in the search radius"})
-        if any((e.get("distance_miles") or radius + 1) <= 3 for e in reports):
-            score += 25; reasons.append({"points": 25, "reason": "hail report within 3 miles"})
-        if len(reports) >= 2:
-            score += 10; reasons.append({"points": 10, "reason": "multiple nearby hail reports"})
-        if any((e.get("magnitude") or 0) >= 1.5 for e in reports):
-            score += 15; reasons.append({"points": 15, "reason": "reported hail at least 1.5 inches"})
-        score = min(score, 100)
-        classification = "strong" if score >= 60 else "moderate" if score >= 25 else "limited"
+        observed = hail + wind + tornado
+
+        max_hail = max((float(e["magnitude"]) for e in hail if e.get("magnitude") is not None), default=None)
+        max_wind = max((float(e["magnitude"]) for e in wind if e.get("magnitude") is not None), default=None)
+        hail_severity = 0 if not hail else 15 if max_hail is not None and max_hail >= 2 else 12 if max_hail is not None and max_hail >= 1.5 else 8 if max_hail is not None and max_hail >= 1 else 4
+        wind_severity = 0 if not wind else 14 if max_wind is not None and max_wind >= 75 else 10 if max_wind is not None and max_wind >= 58 else 5 if max_wind is not None else 4
+        severity = min(35, hail_severity + wind_severity + (18 if tornado else 0) + (8 if tornado_warnings else 0) + (4 if severe_warnings else 0))
+
+        observed_count = len(observed)
+        concentration = 18 if observed_count >= 4 else 15 if observed_count == 3 else 10 if observed_count == 2 else 5 if observed_count == 1 else 0
+        observed_hazards = sum(bool(group) for group in (hail, wind, tornado))
+        concentration = min(20, concentration + (2 if observed_hazards >= 2 else 0))
+
+        distances = [float(e["distance_miles"]) for e in observed if e.get("distance_miles") is not None]
+        nearest = min(distances, default=None)
+        proximity = 15 if nearest is not None and nearest <= 3 else 12 if nearest is not None and nearest <= 5 else 8 if nearest is not None and nearest <= 10 else 4 if nearest is not None and nearest <= radius else 0
+
+        timestamps = []
+        for event in events:
+            if event.get("started_at"):
+                try: timestamps.append(datetime.fromisoformat(str(event["started_at"]).replace("Z", "+00:00")))
+                except ValueError: pass
+        latest = max(timestamps, default=None)
+        age_hours = max(0, (datetime.now(timezone.utc) - latest).total_seconds() / 3600) if latest else None
+        recency = 15 if age_hours is not None and age_hours <= 6 else 12 if age_hours is not None and age_hours <= 24 else 8 if age_hours is not None and age_hours <= 72 else 4 if age_hours is not None and age_hours <= 168 else 2 if age_hours is not None else 0
+
+        quality = 15 if observed and warnings else 10 if observed else 6 if warnings else 2 if historical else 0
+        source_health = {item.get("source"): item.get("freshness_status") for item in (data_health or {}).get("sources", [])}
+        penalties, missing_data = 0, []
+        if source_health.get("spc_reports") not in (None, "fresh"):
+            penalties += 10; missing_data.append("SPC report ingestion is not fresh.")
+        if source_health.get("nws_alerts") not in (None, "fresh"):
+            penalties += 5; missing_data.append("NWS alert ingestion is not fresh.")
+        pending = ((data_health or {}).get("geography", {}).get("event_processing", {}) or {}).get("pending", 0)
+        if pending:
+            penalties += 5; missing_data.append("Some recent events still await geographic processing.")
+
+        components = {
+            "severity": {"score": severity, "max": 35},
+            "evidence_concentration": {"score": concentration, "max": 20},
+            "proximity": {"score": proximity, "max": 15, "nearest_observed_miles": nearest},
+            "recency": {"score": recency, "max": 15, "latest_evidence_at": latest.isoformat() if latest else None},
+            "evidence_quality": {"score": quality, "max": 15},
+        }
+        score = max(0, min(100, sum(item["score"] for item in components.values()) - penalties))
+        support_level = "strong" if score >= 70 else "moderate" if score >= 40 else "limited" if score >= 15 else "insufficient"
         return {
             "location": {"latitude": a["latitude"], "longitude": a["longitude"], "radius_miles": radius},
             "window": self._effective_window(a),
-            "score": score, "classification": classification, "score_reasons": reasons,
-            "evidence": {"warnings": warnings, "hail_reports": reports, "historical_hail_events": historical},
+            "score": score, "classification": support_level, "support_level": support_level,
+            "methodology": {
+                "id": "storm-signal-location-multihazard-v1", "version": 1,
+                "score_range": [0, 100], "penalty_points": penalties,
+                "nhc_scoring_policy": "NHC forecast evidence is excluded from this score and must be presented separately as forecast context.",
+            },
+            "components": components, "missing_data": missing_data,
+            "hazards": {
+                "hail": {"report_count": len(hail), "max_inches": max_hail},
+                "wind": {"report_count": len(wind), "max_mph": max_wind},
+                "tornado": {"report_count": len(tornado)},
+                "warnings": {"severe_thunderstorm_count": len(severe_warnings), "tornado_count": len(tornado_warnings)},
+            },
+            "evidence": {
+                "hail_reports": hail, "wind_reports": wind, "tornado_reports": tornado,
+                "warnings": warnings, "historical_hail_events": historical,
+            },
             "limitations": self._limitations(),
         }
 

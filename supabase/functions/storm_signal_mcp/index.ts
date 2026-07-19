@@ -62,7 +62,7 @@ const TOOLS = [
   },
   {
     name: "assess_location",
-    description: "Produce a deterministic evidence score for a covered location in TX, FL, LA, GA, or NC over the available 14-day window. It never claims that a property was hit or damaged.",
+    description: "Produce a deterministic multihazard support score for hail, wind, tornado, and warning evidence near a covered location over the available 14-day window. NHC forecasts remain separate context and never prove impact or damage.",
     inputSchema: schema({
       latitude: { type: "number", minimum: -90, maximum: 90 }, longitude: { type: "number", minimum: -180, maximum: 180 },
       start_at: { type: "string", format: "date-time" }, end_at: { type: "string", format: "date-time" },
@@ -255,24 +255,65 @@ async function callTool(name: string, a: Args) {
   }
   const radius = Number(a.radius_miles ?? 10)
   const events = await rpc("mcp_search_storm_events", searchParams({ ...a, radius_miles: radius, limit: 200 })) ?? []
-  const reports = events.filter((e: any) => e.event_type === "hail_report")
-  const warnings = events.filter((e: any) => ["severe_thunderstorm_warning", "tornado_warning"].includes(e.event_type))
+  const hail = events.filter((e: any) => e.event_type === "hail_report")
+  const wind = events.filter((e: any) => e.event_type === "wind_report")
+  const tornado = events.filter((e: any) => e.event_type === "tornado_report")
+  const severeWarnings = events.filter((e: any) => e.event_type === "severe_thunderstorm_warning")
+  const tornadoWarnings = events.filter((e: any) => e.event_type === "tornado_warning")
+  const warnings = [...severeWarnings, ...tornadoWarnings]
   const historical = events.filter((e: any) => e.event_type === "historical_hail_event")
-  let score = 0
-  const score_reasons: { points: number; reason: string }[] = []
-  const add = (points: number, reason: string) => { score += points; score_reasons.push({ points, reason }) }
-  if (warnings.length) add(15, "warning evidence in the search radius")
-  if (reports.length) add(30, "preliminary hail report in the search radius")
-  if (reports.some((e: any) => Number(e.distance_miles) <= 3)) add(25, "hail report within 3 miles")
-  if (reports.length >= 2) add(10, "multiple nearby hail reports")
-  if (reports.some((e: any) => Number(e.magnitude) >= 1.5)) add(15, "reported hail at least 1.5 inches")
-  score = Math.min(score, 100)
+  const observed = [...hail, ...wind, ...tornado]
+  const magnitudes = (items: any[]) => items.map((e: any) => e.magnitude).filter((value: any) => value !== null && value !== undefined).map(Number)
+  const hailMagnitudes = magnitudes(hail), windMagnitudes = magnitudes(wind)
+  const maxHail = hailMagnitudes.length ? Math.max(...hailMagnitudes) : null
+  const maxWind = windMagnitudes.length ? Math.max(...windMagnitudes) : null
+  const hailSeverity = !hail.length ? 0 : maxHail !== null && maxHail >= 2 ? 15 : maxHail !== null && maxHail >= 1.5 ? 12 : maxHail !== null && maxHail >= 1 ? 8 : 4
+  const windSeverity = !wind.length ? 0 : maxWind !== null && maxWind >= 75 ? 14 : maxWind !== null && maxWind >= 58 ? 10 : maxWind !== null ? 5 : 4
+  const severity = Math.min(35, hailSeverity + windSeverity + (tornado.length ? 18 : 0) + (tornadoWarnings.length ? 8 : 0) + (severeWarnings.length ? 4 : 0))
+  const hazardCount = [hail, wind, tornado].filter((items) => items.length).length
+  const baseConcentration = observed.length >= 4 ? 18 : observed.length === 3 ? 15 : observed.length === 2 ? 10 : observed.length === 1 ? 5 : 0
+  const concentration = Math.min(20, baseConcentration + (hazardCount >= 2 ? 2 : 0))
+  const distances = observed.map((e: any) => e.distance_miles).filter((value: any) => value !== null && value !== undefined).map(Number)
+  const nearest = distances.length ? Math.min(...distances) : null
+  const proximity = nearest !== null && nearest <= 3 ? 15 : nearest !== null && nearest <= 5 ? 12 : nearest !== null && nearest <= 10 ? 8 : nearest !== null && nearest <= radius ? 4 : 0
+  const timestamps = events.map((e: any) => Date.parse(String(e.started_at ?? ""))).filter((value: number) => !Number.isNaN(value))
+  const latestMs = timestamps.length ? Math.max(...timestamps) : null
+  const ageHours = latestMs === null ? null : Math.max(0, (Date.now() - latestMs) / 3600000)
+  const recency = ageHours !== null && ageHours <= 6 ? 15 : ageHours !== null && ageHours <= 24 ? 12 : ageHours !== null && ageHours <= 72 ? 8 : ageHours !== null && ageHours <= 168 ? 4 : ageHours !== null ? 2 : 0
+  const quality = observed.length && warnings.length ? 15 : observed.length ? 10 : warnings.length ? 6 : historical.length ? 2 : 0
+  const sourceHealth = new Map((data_health?.sources ?? []).map((item: any) => [item.source, item.freshness_status]))
+  let penalties = 0
+  const missing_data: string[] = []
+  if (sourceHealth.has("spc_reports") && sourceHealth.get("spc_reports") !== "fresh") { penalties += 10; missing_data.push("SPC report ingestion is not fresh.") }
+  if (sourceHealth.has("nws_alerts") && sourceHealth.get("nws_alerts") !== "fresh") { penalties += 5; missing_data.push("NWS alert ingestion is not fresh.") }
+  if (Number(data_health?.geography?.event_processing?.pending ?? 0) > 0) { penalties += 5; missing_data.push("Some recent events still await geographic processing.") }
+  const components = {
+    severity: { score: severity, max: 35 },
+    evidence_concentration: { score: concentration, max: 20 },
+    proximity: { score: proximity, max: 15, nearest_observed_miles: nearest },
+    recency: { score: recency, max: 15, latest_evidence_at: latestMs === null ? null : new Date(latestMs).toISOString() },
+    evidence_quality: { score: quality, max: 15 },
+  }
+  const score = Math.max(0, Math.min(100, Object.values(components).reduce((sum, item) => sum + item.score, 0) - penalties))
+  const supportLevel = score >= 70 ? "strong" : score >= 40 ? "moderate" : score >= 15 ? "limited" : "insufficient"
   return {
     trace_id, generated_at, data_health,
     location: { latitude: a.latitude, longitude: a.longitude, radius_miles: radius },
     status: "in_coverage", coverage, window, score,
-    classification: score >= 60 ? "strong" : score >= 25 ? "moderate" : "limited",
-    score_reasons, evidence: { warnings, hail_reports: reports, historical_hail_events: historical }, limitations: LIMITATIONS,
+    classification: supportLevel, support_level: supportLevel,
+    methodology: {
+      id: "storm-signal-location-multihazard-v1", version: 1, score_range: [0, 100], penalty_points: penalties,
+      nhc_scoring_policy: "NHC forecast evidence is excluded from this score and must be presented separately as forecast context.",
+    },
+    components, missing_data,
+    hazards: {
+      hail: { report_count: hail.length, max_inches: maxHail },
+      wind: { report_count: wind.length, max_mph: maxWind },
+      tornado: { report_count: tornado.length },
+      warnings: { severe_thunderstorm_count: severeWarnings.length, tornado_count: tornadoWarnings.length },
+    },
+    evidence: { hail_reports: hail, wind_reports: wind, tornado_reports: tornado, warnings, historical_hail_events: historical },
+    limitations: LIMITATIONS,
   }
 }
 

@@ -103,7 +103,9 @@ def main() -> int:
         "latitude": 30.2672, "longitude": -97.7431, **dates,
     }, 21)
     require(not error and austin.get("status") == "in_coverage", "Austin assessment failed")
-    results.append({"test": "covered_coordinates", "passed": True})
+    require(austin.get("methodology", {}).get("id") == "storm-signal-location-multihazard-v1", "Austin multihazard methodology missing")
+    require(austin.get("support_level") in {"strong", "moderate", "limited", "insufficient"}, "Austin support level missing")
+    results.append({"test": "covered_coordinates_multihazard", "passed": True})
 
     denver, error = call("assess_location", {
         "latitude": 39.7392, "longitude": -104.9903, **dates,

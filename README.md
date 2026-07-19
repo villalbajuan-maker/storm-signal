@@ -87,7 +87,7 @@ The canonical customer-facing MCP URL is `https://mcp.vectoros.co/mcp`. A minima
 
 The MCP initialization metadata advertises the Storm Signal logo through `serverInfo.icons`. Cloudflare serves the same PNG at `/favicon.png` and `/favicon.ico`, keeping the icon on the same origin as required by cautious MCP clients.
 
-The server is stateless even though it issues session identifiers, so Cloud Run can safely use more than one instance. Each tool response includes a trace identifier, structured evidence, and explicit limitations. The location score is deterministic and never claims that a property was hit or damaged.
+The server is stateless even though it issues session identifiers, so Cloud Run can safely use more than one instance. Each tool response includes a trace identifier, structured evidence, and explicit limitations. The versioned location score is deterministic across hail, wind, tornado, warnings, recency, proximity and source health; it keeps NHC forecasts outside the score and never claims that a property was hit or damaged.
 
 `search_storm_events` accepts the persisted source fields plus derived Census/PostGIS filters: `county` matches either the source county or the derived county (with or without the `County`/`Parish` suffix), `place` matches the official Census place name, and `zcta` matches a five-digit Census ZCTA. Search results include their derived states, counties, places, ZCTAs, Census vintage, and method version. ZCTAs are approximate ZIP areas, not USPS delivery boundaries.
 

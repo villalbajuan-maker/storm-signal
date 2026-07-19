@@ -73,10 +73,23 @@ def main() -> int:
     require("score" not in denver, "out-of-coverage location received a score")
     checks.append("unsupported_coordinates")
 
+    austin, error = call("assess_location", {
+        "latitude": 30.2672, "longitude": -97.7431,
+        "start_at": (now - timedelta(days=2)).isoformat(), "end_at": now.isoformat(),
+    }, 6)
+    require(not error and austin.get("status") == "in_coverage", "Austin assessment failed")
+    require(austin.get("methodology", {}).get("id") == "storm-signal-location-multihazard-v1", "multihazard methodology missing")
+    require(set(austin.get("components", {})) == {
+        "severity", "evidence_concentration", "proximity", "recency", "evidence_quality",
+    }, "multihazard components changed")
+    require(austin.get("support_level") in {"strong", "moderate", "limited", "insufficient"}, "support level missing")
+    require("wind" in austin.get("hazards", {}) and "tornado" in austin.get("hazards", {}), "multihazard evidence missing")
+    checks.append("multihazard_location_score")
+
     summary, error = call("summarize_storm_activity", {
         "start_at": (now - timedelta(days=30)).isoformat(),
         "end_at": (now + timedelta(hours=1)).isoformat(), "group_by": "state",
-    }, 6)
+    }, 10)
     require(not error and summary.get("window", {}).get("truncated") is True, "14-day clamp missing")
     require({group.get("group") for group in summary.get("groups", [])} <= COVERED, "summary leaked a state")
     checks.append("window_and_summary_scope")

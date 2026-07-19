@@ -57,11 +57,12 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 - Audited Census/PostGIS coverage for the controlled demo: Texas, Florida, Louisiana, Georgia, and North Carolina.
 - National NWS/SPC ingestion with commercial MCP answers limited to those five states and the latest 14 days.
 - `get_storm_event` returns geographic lineage and identifies ZCTA as an approximate ZIP area, not a USPS delivery boundary.
+- `assess_location` applies the versioned [`multihazard-location-score-contract.md`](multihazard-location-score-contract.md) across hail, wind, tornado and warning evidence, with explicit health penalties and NHC forecasts excluded from scoring.
 
 ### Partially delivered
 
 - **Find the signal:** operational for current severe-event types and versioned NHC tropical-cyclone evidence within the five-state controlled-demo geography.
-- **Rank the markets:** an evidence score exists for a location, but a market-level commercial ranking contract is not yet complete.
+- **Rank the markets:** the multihazard location-support score is operational; market-level comparison, operating-base proximity and `prioritize`/`monitor` outputs remain the next stage.
 - **Build the field plan:** conversational design is defined; structured plan entities and generation are not yet implemented.
 - **Share the brief:** templates and output requirements are defined; production document generation and workspace persistence are not yet implemented.
 
