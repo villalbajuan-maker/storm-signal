@@ -58,4 +58,6 @@ Los 18 eventos no se borrarían: únicamente quedarían sin asociación geográf
 
 ## Puerta de control
 
-Tramos 1, 2 y 3 están completos. El tramo 3 generó una instantánea lógica completa de los datos públicos, que incluye las 22,251 geografías y sus asociaciones, en `backups/geography-2026-07-19-pre-reduction-full/public-data.sql.gz`. El archivo local comprimido ocupa 368 MB y pasó verificación de integridad gzip y SHA-256. Todavía no existe autorización ejecutada para eliminar geografía, limpiar asociaciones ni compactar la base.
+Tramos 1, 2, 3 y 4 están completos. El tramo 3 generó una instantánea lógica completa de los datos públicos, que incluye las 22,251 geografías y sus asociaciones, en `backups/geography-2026-07-19-pre-reduction-full/public-data.sql.gz`. El archivo local comprimido ocupa 368 MB y pasó verificación de integridad gzip y SHA-256.
+
+El tramo 4 eliminó en una transacción atómica las 11,485 geografías aprobadas. Quedaron 10,766 geografías, los cinco estados focales y ninguna geografía no-ZCTA de los siete estados retirados. Las cascadas retiraron 99 asociaciones de eventos y 99 asociaciones ciclónicas: quedaron 590 y 4,076 respectivamente, sin huérfanos. La tabla continúa ocupando 499 MB físicamente porque todavía no se ha compactado. Esa recuperación y su medición pertenecen exclusivamente al tramo 5.
