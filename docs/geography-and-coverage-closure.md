@@ -1,11 +1,13 @@
 # Storm Signal — Cierre geográfico y estado de cobertura
 
+> **Instantánea histórica, reemplazada:** este documento registra la secuencia de importación de 12 estados antes de la reducción de almacenamiento del 19 de julio de 2026. La cobertura comercial vigente es Texas, Florida, Louisiana, Georgia y North Carolina; el contrato autoritativo es [`controlled-demo-coverage-contract.md`](controlled-demo-coverage-contract.md).
+
 **Fecha de corte:** 19 de julio de 2026  
-**Estado:** geografía comercial inicial completada; plan siguiente congelado en el orden de este documento
+**Estado histórico:** secuencia de 12 estados completada antes de la reducción a cinco estados
 
 ## Resumen ejecutivo
 
-Storm Signal ya tiene una base geográfica operativa y auditable para 12 estados comerciales. Los eventos pueden persistirse con evidencia original, representarse en PostGIS y relacionarse con estado, condado, lugar Census y ZCTA. La plataforma también tiene ingesta automática y fresca para alertas NWS y reportes preliminares SPC de granizo, viento y tornado.
+En este punto histórico, Storm Signal había cargado una base geográfica operativa y auditable para 12 estados. Posteriormente se conservaron únicamente cinco estados comerciales. Los eventos continúan persistiendo evidencia nacional original, mientras el MCP y la geografía comercial se limitan a TX, FL, LA, GA y NC durante los últimos 14 días.
 
 La cobertura no está completa para todos los peligros. Huracanes, campos de viento tropical, marejada ciclónica, inundaciones fluviales y crecidas rápidas siguen sin conectores ni modelos persistidos. Tampoco está terminado el recorrido comercial: falta automatizar el enriquecimiento geográfico de cada evento nuevo, buscar desde el MCP por geografía derivada, priorizar mercados, construir planes de campo y generar entregables persistentes.
 

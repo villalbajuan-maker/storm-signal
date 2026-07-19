@@ -25,7 +25,7 @@ Official references:
 
 ## Initial boundary layers
 
-Load the latest stable nationwide Census vintage in this order:
+Load the latest stable Census vintage in bounded, explicitly approved state batches, in this layer order:
 
 1. States and state equivalents.
 2. Counties and county equivalents.
@@ -125,7 +125,7 @@ Keep the four-tool contract and extend their inputs/results:
 
 Example supported question:
 
-> Which ZCTAs in Montana had the strongest observed hail signals in the last 48 hours, and what evidence supports each one?
+> Which Texas ZCTAs had the strongest observed hail signals in the last 48 hours, and what evidence supports each one?
 
 ### Phase 4 — Commercial prioritization
 
@@ -157,15 +157,15 @@ Return `prioritize`, `monitor`, or `insufficient_evidence`, with score component
 7. MCP answers use `ZCTA`/`approximate ZIP area` accurately.
 8. Tests include urban, rural, border, water, missing-geometry, and multi-state polygon cases.
 
-## Recommended next implementation session
+## Historical pilot sequence and current status
 
-Start with one thin vertical slice before nationwide loading:
+The original implementation began with one thin vertical slice:
 
 1. Create the versioned tables and indexes.
 2. Import counties, Census places, and ZCTAs for Montana, where current SPC evidence already exists.
 3. Backfill the four Montana hail reports.
 4. Extend `get_storm_event` and `summarize_storm_activity` to return the derived territories.
 5. Verify the conversational flow through Claude.
-6. Once correct, scale the same importer nationwide in bounded, resumable batches.
+6. Once correct, scale the same importer in bounded, resumable state batches.
 
-Montana is a validation territory, not a permanent product limitation. This sequence lets us prove point-to-territory enrichment against live data before paying the operational cost of a nationwide import.
+Montana was the validation territory, not the current commercial scope. A later 12-state sequence was completed and then reduced for storage discipline. The current controlled demo retains TX, FL, LA, GA, and NC; expansion requires explicit approval and capacity planning.

@@ -64,9 +64,9 @@ limit 20;
 
 Every live NWS/SPC upsert now sends the exact created or updated event IDs through the versioned Census/PostGIS enrichment phase. Weather ingestion and derived geography have independent outcomes: a geographic failure is recorded in the same run without discarding successfully persisted source evidence.
 
-Every MCP tool response also includes `data_health`: source freshness, the latest ingestion outcome, current geographic/time coverage, the Census vintage and method version, the 12 covered states, geographic processing counts, queue health, and actionable alerts. This prevents an empty result from being presented as proof that no severe weather occurred when the relevant source is stale, has not been ingested, or is still awaiting geographic processing. Audited territorial counts are persisted in `geographic_coverage_summary` so MCP calls do not recalculate thousands of polygon intersections.
+Every MCP tool response also includes `data_health`: national source freshness and ingestion outcomes, plus commercial event and geographic coverage for Texas, Florida, Louisiana, Georgia, and North Carolina over the latest 14 days. It also exposes Census vintage, method version, processing counts, queue health, and actionable alerts. This prevents an empty result from being presented as proof that no severe weather occurred when a source is stale, outside the controlled territory, or still awaiting geographic processing. Audited territorial counts are persisted in `geographic_coverage_summary` so MCP calls do not recalculate thousands of polygon intersections.
 
-The GitHub Actions workflow in `.github/workflows/ingest.yml` remains available for manual recovery and the bounded Texas/Oklahoma historical refresh. It requires repository secrets named `SUPABASE_URL` and `SUPABASE_SECRET_KEY`.
+Supabase cron is the intended operational scheduler. The legacy GitHub Actions workflow in `.github/workflows/ingest.yml` is still scheduled redundantly and includes an obsolete Texas/Oklahoma historical job; its consolidation into manual recovery-only mode is tracked as hygiene tranche 2. It requires repository secrets named `SUPABASE_URL` and `SUPABASE_SECRET_KEY` while it remains enabled.
 
 ## Run the MCP server
 
@@ -119,13 +119,12 @@ Source identifiers should be used as follows:
 
 All normalized geometry should use PostGIS SRID 4326. Preserve source geometry unchanged in `source_records`; derived centroids and distance calculations must be marked as derived.
 
-The next product increment is the versioned Census boundary and territorial enrichment layer documented in [`docs/geospatial-enrichment-plan.md`](docs/geospatial-enrichment-plan.md) and frozen through [`docs/geospatial-data-contract.md`](docs/geospatial-data-contract.md). It will map event points and polygons to counties, Census places, and ZCTAs while preserving the difference between observed points, warning areas, and approximate ZIP areas.
+The versioned Census boundary and territorial enrichment layer is operational and documented in [`docs/geospatial-enrichment-plan.md`](docs/geospatial-enrichment-plan.md) and [`docs/geospatial-data-contract.md`](docs/geospatial-data-contract.md). The controlled demo retains state, county, Census place, and ZCTA polygons for TX, FL, LA, GA, and NC. National weather ingestion is intentionally broader than this commercial geography.
 
-Run one state import after applying migrations (requires GDAL's `ogr2ogr` and the linked Supabase CLI). Montana remains the default; subsequent states use their two-digit Census FIPS code:
+Run an explicitly scoped state import only when commercial coverage expansion has been approved (requires GDAL's `ogr2ogr` and the linked Supabase CLI). Use the two-digit Census FIPS code; do not rely on the importer's historical Montana default:
 
 ```bash
 supabase db push
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python3 scripts/import_census_geographies.py --apply
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python3 scripts/import_census_geographies.py --state-fips 48 --apply  # Texas
 ```
 

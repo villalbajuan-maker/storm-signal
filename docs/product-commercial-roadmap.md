@@ -54,12 +54,13 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 - Historical NOAA Storm Events hail evidence.
 - Four read-only MCP tools: `search_storm_events`, `get_storm_event`, `assess_location`, and `summarize_storm_activity`.
 - Census/PostGIS state, county, place and ZCTA enrichment.
-- Audited Census/PostGIS coverage for the initial 12-state commercial sequence.
+- Audited Census/PostGIS coverage for the controlled demo: Texas, Florida, Louisiana, Georgia, and North Carolina.
+- National NWS/SPC ingestion with commercial MCP answers limited to those five states and the latest 14 days.
 - `get_storm_event` returns geographic lineage and identifies ZCTA as an approximate ZIP area, not a USPS delivery boundary.
 
 ### Partially delivered
 
-- **Find the signal:** operational for current event types and the 12-state commercial geography; nationwide enrichment remains incomplete.
+- **Find the signal:** operational for current event types within the five-state controlled-demo geography; NHC evidence is persisted but not yet exposed through the MCP.
 - **Rank the markets:** an evidence score exists for a location, but a market-level commercial ranking contract is not yet complete.
 - **Build the field plan:** conversational design is defined; structured plan entities and generation are not yet implemented.
 - **Share the brief:** templates and output requirements are defined; production document generation and workspace persistence are not yet implemented.
@@ -68,7 +69,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 
 ### Stage 1 — Complete the evidence and territory foundation
 
-1. Expand Census/PostGIS coverage in this order:
+1. Historical Census/PostGIS import sequence (completed, then reduced for the controlled demo):
    - Montana — complete pilot.
    - Texas — geography imported, audited and applied to existing events.
    - Florida — geography imported, audited and applied to existing events.
@@ -82,7 +83,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
    - Missouri — geography imported, audited and applied to existing events.
    - South Carolina — geography imported and audited; no persisted South Carolina events currently await enrichment.
 
-   The initial 12-state commercial geography sequence is complete.
+   The 12-state import sequence was technically completed. On July 19, 2026, storage was deliberately reduced to TX, FL, LA, GA, and NC. The other seven state datasets were backed up and removed; they are not current commercial coverage.
 2. Backfill every event without a geographic-processing status and enrich every new or updated event automatically — completed July 19, 2026 with zero pending at closure.
 3. Allow MCP searches by derived county, place and ZCTA — completed July 19, 2026 and validated through the public MCP endpoint.
 4. Expose geographic coverage and gaps in `data_health` — completed July 19, 2026 with public queue and coverage validation.

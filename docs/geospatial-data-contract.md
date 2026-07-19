@@ -1,8 +1,12 @@
 # Storm Signal geospatial data contract v0.1
 
-**Status:** proposed for freeze  
-**Initial territory:** Montana validation slice  
-**Expansion target:** nationwide United States coverage  
+**Status:** implemented; operational scope amended July 19, 2026
+
+**Original validation territory:** Montana
+
+**Current commercial territory:** Texas, Florida, Louisiana, Georgia, and North Carolina
+
+**Future expansion:** state-by-state only after explicit commercial and storage approval
 **Boundary authority:** U.S. Census Bureau TIGER/Line, initial vintage 2025
 
 ## 1. Promise
@@ -173,8 +177,8 @@ Every returned event may include:
 {
   "geospatial_status": "complete",
   "geographies": {
-    "state": [{"geoid": "30", "name": "Montana", "vintage": 2025}],
-    "county": [{"geoid": "...", "name": "Pondera County", "vintage": 2025}],
+    "state": [{"geoid": "48", "name": "Texas", "vintage": 2025}],
+    "county": [{"geoid": "...", "name": "Floyd County", "vintage": 2025}],
     "place": [],
     "zcta": [{"geoid": "...", "zcta5": "...", "vintage": 2025}]
   },
@@ -194,7 +198,7 @@ Tool extensions:
 
 An empty territorial result must disclose Census coverage/vintage and `geospatial_status`; it must not be presented as proof that the event belongs to no ZIP code or community.
 
-## 8. Pilot acceptance criteria
+## 8. Historical pilot acceptance criteria
 
 The Montana slice is accepted only when:
 
@@ -207,7 +211,7 @@ The Montana slice is accepted only when:
 7. Responses expose vintage, GEOID, relation and method version.
 8. Automated tests cover point-on-boundary, missing geometry and polygon intersection behavior.
 
-After acceptance, the same importer and schema expand nationwide by state/layer batches without changing this contract.
+The Montana pilot proved the importer and schema. The later 12-state import was reduced to the approved five-state controlled demo because of storage constraints. Expansion is no longer automatic or nationwide-by-default.
 
 ## 9. Explicitly deferred
 
@@ -219,7 +223,7 @@ After acceptance, the same importer and schema expand nationwide by state/layer 
 - customer territories and CRM routing;
 - forecast polygons, which will reuse this geographic foundation in the next integration.
 
-## 10. Freeze decision
+## 10. Original freeze decision and current amendment
 
 Before implementation, confirm these four decisions:
 
@@ -228,4 +232,4 @@ Before implementation, confirm these four decisions:
 3. Initial layers: `state + county + place + ZCTA`.
 4. User-facing terminology: `ZCTA (approximate ZIP area)`.
 
-Once frozen, implementation begins with migrations and the Montana importer; changes to these four decisions require a contract revision.
+These four decisions describe the completed original pilot. The July 19, 2026 amendment preserves the 2025 vintage, layers, and terminology while replacing the operational territory with TX, FL, LA, GA, and NC. The authoritative response guard is [`controlled-demo-coverage-contract.md`](controlled-demo-coverage-contract.md).
