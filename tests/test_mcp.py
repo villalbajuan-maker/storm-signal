@@ -20,7 +20,8 @@ class FakeDatabase:
             return {"status": "in_coverage", "scope_defaulted": True, "covered_states": []}
         if name not in self.responses and name == "mcp_check_event_coverage":
             return {"status": "in_coverage", "requested_state_code": "TX", "covered_states": []}
-        return self.responses.get(name, [])
+        value = self.responses.get(name, [])
+        return value(parameters) if callable(value) else value
 
 
 async def request(app, method, path, payload=None, headers=None):
@@ -58,13 +59,13 @@ class MCPTransportTests(unittest.TestCase):
         self.assertIn("mcp-session-id", headers)
         self.assertEqual(headers["access-control-expose-headers"], "mcp-session-id")
 
-    def test_tools_list_is_exactly_the_frozen_five(self):
+    def test_tools_list_is_exactly_the_frozen_six(self):
         _, _, body = asyncio.run(request(self.app, "POST", "/mcp", {
             "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}
         }))
         self.assertEqual([t["name"] for t in body["result"]["tools"]], [
             "search_storm_events", "get_storm_event", "assess_location",
-            "summarize_storm_activity", "search_tropical_cyclones",
+            "summarize_storm_activity", "search_tropical_cyclones", "rank_markets",
         ])
 
     def test_notification_is_accepted_without_response_body(self):
@@ -272,6 +273,56 @@ class MCPToolTests(unittest.TestCase):
         self.assertEqual(result["status"], "out_of_coverage")
         self.assertEqual(result["cyclones"], [])
         self.assertFalse(any(name == "mcp_search_tropical_cyclones_compact" for name, _ in database.calls))
+
+    def test_market_ranking_is_deterministic_and_operationally_weighted(self):
+        recent = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        events = [
+            {"id": "h", "event_type": "hail_report", "distance_miles": 2, "magnitude": 1.75, "started_at": recent},
+            {"id": "w", "event_type": "wind_report", "distance_miles": 4, "magnitude": 80, "started_at": recent},
+            {"id": "t", "event_type": "tornado_report", "distance_miles": 5, "started_at": recent},
+            {"id": "tw", "event_type": "tornado_warning", "distance_miles": 8, "started_at": recent},
+        ]
+        health = {"sources": [
+            {"source": "spc_reports", "freshness_status": "fresh"},
+            {"source": "nws_alerts", "freshness_status": "fresh"},
+        ], "geography": {"queue_status": "healthy", "event_processing": {"pending": 0}}}
+        result = StormSignalTools(FakeDatabase({
+            "mcp_search_storm_events": events, "mcp_data_health": health,
+        })).call("rank_markets", {
+            "markets": [
+                {"name": "Near market", "latitude": 30.2672, "longitude": -97.7431},
+                {"name": "Far market", "latitude": 34.7465, "longitude": -92.2896},
+            ],
+            "operating_base": {"name": "Austin", "latitude": 30.2672, "longitude": -97.7431},
+            "start_at": recent, "end_at": datetime.now(timezone.utc).isoformat(), "radius_miles": 10,
+        })
+        self.assertEqual(result["methodology"]["id"], "storm-signal-market-ranking-v1")
+        self.assertEqual(result["markets"][0]["name"], "Near market")
+        self.assertEqual(result["markets"][0]["rank"], 1)
+        self.assertEqual(result["markets"][0]["decision"], "prioritize")
+        self.assertGreater(result["markets"][0]["final_score"], result["markets"][1]["final_score"])
+        self.assertIn("straight-line", result["methodology"]["distance_interpretation"])
+
+    def test_market_ranking_keeps_out_of_coverage_candidate_ineligible(self):
+        def coverage(parameters):
+            if parameters.get("p_lat") and parameters["p_lat"] > 35:
+                return {"status": "out_of_coverage", "requested_state": "Colorado"}
+            return {"status": "in_coverage", "scope_defaulted": parameters.get("p_lat") is None}
+        database = FakeDatabase({"mcp_check_coverage": coverage, "mcp_data_health": {
+            "geography": {"queue_status": "healthy", "event_processing": {"pending": 0}},
+        }})
+        result = StormSignalTools(database).call("rank_markets", {
+            "markets": [
+                {"name": "Austin", "latitude": 30.2672, "longitude": -97.7431},
+                {"name": "Denver", "latitude": 39.7392, "longitude": -104.9903},
+            ],
+            "start_at": "2026-07-18T00:00:00Z", "end_at": "2026-07-19T23:59:59Z",
+        })
+        denver = next(item for item in result["markets"] if item["name"] == "Denver")
+        self.assertEqual(result["status"], "partial")
+        self.assertFalse(denver["eligible"])
+        self.assertIsNone(denver["final_score"])
+        self.assertEqual(denver["decision"], "insufficient_evidence")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 This proof of concept ingests, normalizes, persists, and serves evidence from three authoritative severe-weather sources. It preserves raw provenance and hashes while maintaining a queryable PostGIS interpretation of each event.
 
-It also includes a remote MCP server that exposes the persisted evidence through five read-only tools: `search_storm_events`, `get_storm_event`, `assess_location`, `summarize_storm_activity`, and `search_tropical_cyclones`.
+It also includes a remote MCP server that exposes persisted evidence and decisions through six read-only tools: `search_storm_events`, `get_storm_event`, `assess_location`, `summarize_storm_activity`, `search_tropical_cyclones`, and `rank_markets`.
 
 Product promise, frozen commercial outcomes, delivery order, and Gulf Coast expansion are governed by [the product and commercial roadmap](docs/product-commercial-roadmap.md).
 
@@ -88,6 +88,8 @@ The canonical customer-facing MCP URL is `https://mcp.vectoros.co/mcp`. A minima
 The MCP initialization metadata advertises the Storm Signal logo through `serverInfo.icons`. Cloudflare serves the same PNG at `/favicon.png` and `/favicon.ico`, keeping the icon on the same origin as required by cautious MCP clients.
 
 The server is stateless even though it issues session identifiers, so Cloud Run can safely use more than one instance. Each tool response includes a trace identifier, structured evidence, and explicit limitations. The versioned location score is deterministic across hail, wind, tornado, warnings, recency, proximity and source health; it keeps NHC forecasts outside the score and never claims that a property was hit or damaged.
+
+`rank_markets` compares two to five explicitly located candidates using 70 points of multihazard evidence support, 20 points of straight-line operating-base proximity, 10 points of geographic readiness, and disclosed missing-input penalties. Its outputs are investigation priorities—`prioritize`, `monitor`, or `insufficient_evidence`—not leads or confirmed opportunities.
 
 `search_storm_events` accepts the persisted source fields plus derived Census/PostGIS filters: `county` matches either the source county or the derived county (with or without the `County`/`Parish` suffix), `place` matches the official Census place name, and `zcta` matches a five-digit Census ZCTA. Search results include their derived states, counties, places, ZCTAs, Census vintage, and method version. ZCTAs are approximate ZIP areas, not USPS delivery boundaries.
 

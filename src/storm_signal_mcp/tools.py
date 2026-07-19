@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from math import atan2, cos, pi, sin, sqrt
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -99,6 +100,31 @@ TOOL_DEFINITIONS = [
         }),
         "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     },
+    {
+        "name": "rank_markets",
+        "description": "Compare 2 to 5 explicitly located candidate markets using multihazard evidence, operating-base proximity, geographic readiness, and missing-input penalties. Outputs are investigation priorities, never leads.",
+        "inputSchema": _schema({
+            "markets": {"type": "array", "minItems": 2, "maxItems": 5, "items": {
+                "type": "object", "additionalProperties": False,
+                "required": ["name", "latitude", "longitude"],
+                "properties": {
+                    "name": {"type": "string", "minLength": 1, "maxLength": 120},
+                    "latitude": {"type": "number", "minimum": -90, "maximum": 90},
+                    "longitude": {"type": "number", "minimum": -180, "maximum": 180},
+                },
+            }},
+            "start_at": {"type": "string", "format": "date-time"},
+            "end_at": {"type": "string", "format": "date-time"},
+            "radius_miles": {"type": "number", "exclusiveMinimum": 0, "maximum": 100, "default": 10},
+            "operating_base": {"type": "object", "additionalProperties": False,
+                "required": ["latitude", "longitude"], "properties": {
+                    "name": {"type": "string", "maxLength": 120},
+                    "latitude": {"type": "number", "minimum": -90, "maximum": 90},
+                    "longitude": {"type": "number", "minimum": -180, "maximum": 180},
+                }},
+        }, ["markets", "start_at", "end_at"]),
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    },
 ]
 
 
@@ -161,6 +187,8 @@ class StormSignalTools:
                 "evidence_domain": "nhc_tropical_cyclone",
                 "limitations": self._nhc_limitations(),
             }
+        elif name == "rank_markets":
+            result = self._rank_markets(arguments, data_health, coverage)
         else:
             raise ValueError(f"Unknown tool: {name}")
         return {
@@ -169,6 +197,86 @@ class StormSignalTools:
             "data_health": data_health,
             **result,
         }
+
+    def _rank_markets(self, a: dict[str, Any], data_health: dict[str, Any], coverage: dict[str, Any]) -> dict[str, Any]:
+        base = a.get("operating_base")
+        evaluated = []
+        for market in a["markets"]:
+            assessment = self.call("assess_location", {
+                "latitude": market["latitude"], "longitude": market["longitude"],
+                "start_at": a["start_at"], "end_at": a["end_at"],
+                "radius_miles": a.get("radius_miles", 10),
+            })
+            if assessment["status"] != "in_coverage":
+                evaluated.append({
+                    "name": market["name"],
+                    "location": {"latitude": market["latitude"], "longitude": market["longitude"]},
+                    "eligible": False, "decision": "insufficient_evidence",
+                    "final_score": None, "rank": None, "coverage": assessment.get("coverage"),
+                    "message": COVERAGE_MESSAGE,
+                })
+                continue
+            base_distance = self._distance_miles(
+                float(base["latitude"]), float(base["longitude"]),
+                float(market["latitude"]), float(market["longitude"]),
+            ) if base else None
+            evidence_points = round(float(assessment["score"]) * .7)
+            proximity_points = self._operating_proximity(base_distance)
+            readiness_points = 10 if (data_health or {}).get("geography", {}).get("queue_status") == "healthy" else 5
+            missing_penalty = 0 if base else 5
+            final_score = max(0, min(100, evidence_points + proximity_points + readiness_points - missing_penalty))
+            decision = "insufficient_evidence" if assessment["support_level"] == "insufficient" else "prioritize" if final_score >= 65 else "monitor" if final_score >= 30 else "insufficient_evidence"
+            evaluated.append({
+                "name": market["name"],
+                "location": {"latitude": market["latitude"], "longitude": market["longitude"], "radius_miles": a.get("radius_miles", 10)},
+                "eligible": True, "decision": decision, "final_score": final_score, "rank": None,
+                "support_level": assessment["support_level"],
+                "components": {
+                    "multihazard_evidence": {"score": evidence_points, "max": 70, "source_score": assessment["score"]},
+                    "operating_proximity": {"score": proximity_points, "max": 20, "straight_line_miles": round(base_distance, 1) if base_distance is not None else None},
+                    "geographic_readiness": {"score": readiness_points, "max": 10},
+                    "missing_input_penalty": {"score": -missing_penalty, "operating_base_missing": base is None},
+                },
+                "evidence_components": assessment["components"], "hazards": assessment["hazards"],
+                "missing_data": [*assessment.get("missing_data", []), *(["Operating base was not supplied; operational proximity could not be scored."] if not base else [])],
+                "rationale": "Strongest combined support for investigation under the supplied evidence and operating constraints." if decision == "prioritize" else "Some investigation support exists, but the evidence or operating fit is not strong enough to prioritize." if decision == "monitor" else "Current persisted evidence is insufficient for market prioritization.",
+            })
+        ranked = sorted((item for item in evaluated if item["eligible"]), key=lambda item: (-item["final_score"], item["name"]))
+        for index, item in enumerate(ranked, 1): item["rank"] = index
+        output = sorted(evaluated, key=lambda item: (item["rank"] if item["rank"] is not None else 999, item["name"]))
+        return {
+            "status": "in_coverage" if len(ranked) == len(a["markets"]) else "partial" if ranked else "insufficient_evidence",
+            "coverage": coverage,
+            "methodology": {
+                "id": "storm-signal-market-ranking-v1", "version": 1,
+                "component_maxima": {"multihazard_evidence": 70, "operating_proximity": 20, "geographic_readiness": 10},
+                "decision_thresholds": {"prioritize": 65, "monitor": 30, "insufficient_evidence": 0},
+                "distance_interpretation": "Operating proximity uses straight-line distance, not road distance or travel time.",
+            },
+            "operating_base": base, "markets": output, "count": len(output),
+            "limitations": [
+                *self._limitations(),
+                "Rankings are relative investigation priorities, not leads, confirmed opportunities, route plans, or proof of damage.",
+                "NHC forecast evidence is not included in market-ranking points.",
+            ],
+        }
+
+    @staticmethod
+    def _distance_miles(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float:
+        radians = lambda value: value * pi / 180
+        d_lat, d_lon = radians(b_lat - a_lat), radians(b_lon - a_lon)
+        h = sin(d_lat / 2) ** 2 + cos(radians(a_lat)) * cos(radians(b_lat)) * sin(d_lon / 2) ** 2
+        return 3958.7613 * 2 * atan2(sqrt(h), sqrt(1 - h))
+
+    @staticmethod
+    def _operating_proximity(distance: float | None) -> int:
+        if distance is None: return 0
+        if distance <= 50: return 20
+        if distance <= 100: return 16
+        if distance <= 200: return 12
+        if distance <= 300: return 8
+        if distance <= 500: return 4
+        return 0
 
     def _assess(self, a: dict[str, Any], data_health: dict[str, Any]) -> dict[str, Any]:
         radius = float(a.get("radius_miles", 10))
@@ -326,7 +434,7 @@ class StormSignalTools:
         names = {tool["name"] for tool in TOOL_DEFINITIONS}
         if name not in names:
             raise ValueError(f"Unknown tool: {name}")
-        if name in ("assess_location", "summarize_storm_activity"):
+        if name in ("assess_location", "summarize_storm_activity", "rank_markets"):
             for key in ("start_at", "end_at"):
                 if key not in a: raise ValueError(f"{key} is required")
                 datetime.fromisoformat(str(a[key]).replace("Z", "+00:00"))
@@ -343,6 +451,18 @@ class StormSignalTools:
             atcf_id = str(a.get("atcf_id", ""))
             if atcf_id and (len(atcf_id) != 8 or not atcf_id[:2].isalpha() or not atcf_id[2:].isdigit()):
                 raise ValueError("atcf_id must use the ATCF format, for example AL012026")
+        if name == "rank_markets":
+            markets = a.get("markets")
+            if not isinstance(markets, list) or not 2 <= len(markets) <= 5:
+                raise ValueError("markets must contain between 2 and 5 candidates")
+            for market in markets:
+                if not isinstance(market, dict) or not str(market.get("name", "")).strip():
+                    raise ValueError("every market requires a name")
+                if not (-90 <= float(market.get("latitude", 999)) <= 90 and -180 <= float(market.get("longitude", 999)) <= 180):
+                    raise ValueError("every market requires valid latitude and longitude")
+            base = a.get("operating_base")
+            if base and not (-90 <= float(base.get("latitude", 999)) <= 90 and -180 <= float(base.get("longitude", 999)) <= 180):
+                raise ValueError("operating_base requires valid latitude and longitude")
         coords = (a.get("latitude"), a.get("longitude"))
         if (coords[0] is None) != (coords[1] is None):
             raise ValueError("latitude and longitude must be provided together")

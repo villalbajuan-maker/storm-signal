@@ -52,7 +52,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 - Observed SPC hail, wind and tornado reports.
 - NWS severe-thunderstorm and tornado warning evidence.
 - Historical NOAA Storm Events hail evidence.
-- Five read-only MCP tools: `search_storm_events`, `get_storm_event`, `assess_location`, `summarize_storm_activity`, and `search_tropical_cyclones`.
+- Six read-only MCP tools: `search_storm_events`, `get_storm_event`, `assess_location`, `summarize_storm_activity`, `search_tropical_cyclones`, and `rank_markets`.
 - Census/PostGIS state, county, place and ZCTA enrichment.
 - Audited Census/PostGIS coverage for the controlled demo: Texas, Florida, Louisiana, Georgia, and North Carolina.
 - National NWS/SPC ingestion with commercial MCP answers limited to those five states and the latest 14 days.
@@ -62,7 +62,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 ### Partially delivered
 
 - **Find the signal:** operational for current severe-event types and versioned NHC tropical-cyclone evidence within the five-state controlled-demo geography.
-- **Rank the markets:** the multihazard location-support score is operational; market-level comparison, operating-base proximity and `prioritize`/`monitor` outputs remain the next stage.
+- **Rank the markets:** operational through the versioned [`market-ranking-contract.md`](market-ranking-contract.md), with explicit candidate coordinates, multihazard support, operating-base proximity and `prioritize`/`monitor`/`insufficient_evidence` outputs.
 - **Build the field plan:** conversational design is defined; structured plan entities and generation are not yet implemented.
 - **Share the brief:** templates and output requirements are defined; production document generation and workspace persistence are not yet implemented.
 
@@ -114,9 +114,9 @@ Primary official sources:
 
 Commercial outcomes strengthened: **Find the signal** and **Rank the markets**.
 
-### Stage 3 — Market ranking V1
+### Stage 3 — Market ranking V1 — completed July 19, 2026
 
-Create a versioned and deterministic market-priority contract. Initial components:
+The versioned and deterministic market-priority contract is implemented. Its initial components are:
 
 - event severity;
 - concentration of independent evidence;

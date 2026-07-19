@@ -94,6 +94,34 @@ const TOOLS = [
     }),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
+  {
+    name: "rank_markets",
+    description: "Compare 2 to 5 explicitly located candidate markets using the versioned multihazard evidence score, operating-base proximity, geographic readiness, and missing-input penalties. Outputs are investigation priorities, never leads or confirmed opportunities.",
+    inputSchema: schema({
+      markets: {
+        type: "array", minItems: 2, maxItems: 5,
+        items: {
+          type: "object", additionalProperties: false, required: ["name", "latitude", "longitude"],
+          properties: {
+            name: { type: "string", minLength: 1, maxLength: 120 },
+            latitude: { type: "number", minimum: -90, maximum: 90 },
+            longitude: { type: "number", minimum: -180, maximum: 180 },
+          },
+        },
+      },
+      start_at: { type: "string", format: "date-time" }, end_at: { type: "string", format: "date-time" },
+      radius_miles: { type: "number", exclusiveMinimum: 0, maximum: 100, default: 10 },
+      operating_base: {
+        type: "object", additionalProperties: false, required: ["latitude", "longitude"],
+        properties: {
+          name: { type: "string", maxLength: 120 },
+          latitude: { type: "number", minimum: -90, maximum: 90 },
+          longitude: { type: "number", minimum: -180, maximum: 180 },
+        },
+      },
+    }, ["markets", "start_at", "end_at"]),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
 ]
 
 const cors = {
@@ -136,10 +164,19 @@ function tropicalParams(a: Args) {
 function validate(name: string, a: Args) {
   if (!TOOLS.some((tool) => tool.name === name)) throw new Error(`Unknown tool: ${name}`)
   if (name === "get_storm_event" && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(a.event_id ?? ""))) throw new Error("event_id must be a UUID")
-  if (["assess_location", "summarize_storm_activity"].includes(name)) {
+  if (["assess_location", "summarize_storm_activity", "rank_markets"].includes(name)) {
     if (!a.start_at || !a.end_at) throw new Error("start_at and end_at are required")
     if (Number.isNaN(Date.parse(String(a.start_at))) || Number.isNaN(Date.parse(String(a.end_at)))) throw new Error("Invalid date-time")
     if (Date.parse(String(a.start_at)) > Date.parse(String(a.end_at))) throw new Error("start_at must be before end_at")
+  }
+  if (name === "rank_markets") {
+    if (!Array.isArray(a.markets) || a.markets.length < 2 || a.markets.length > 5) throw new Error("markets must contain between 2 and 5 candidates")
+    for (const market of a.markets as any[]) {
+      if (!market || typeof market.name !== "string" || !market.name.trim()) throw new Error("every market requires a name")
+      if (!(Number(market.latitude) >= -90 && Number(market.latitude) <= 90) || !(Number(market.longitude) >= -180 && Number(market.longitude) <= 180)) throw new Error("every market requires valid latitude and longitude")
+    }
+    const base = a.operating_base as any
+    if (base && (!(Number(base.latitude) >= -90 && Number(base.latitude) <= 90) || !(Number(base.longitude) >= -180 && Number(base.longitude) <= 180))) throw new Error("operating_base requires valid latitude and longitude")
   }
   if (name === "search_tropical_cyclones") {
     for (const key of ["issued_after", "issued_before", "valid_at"]) {
@@ -217,7 +254,19 @@ function presentCoverage(value: any) {
   return { ...value, message: value?.status === "in_coverage" ? IN_COVERAGE_MESSAGE : COVERAGE_MESSAGE }
 }
 
-async function callTool(name: string, a: Args) {
+function distanceMiles(aLat: number, aLon: number, bLat: number, bLon: number) {
+  const radians = (value: number) => value * Math.PI / 180
+  const dLat = radians(bLat - aLat), dLon = radians(bLon - aLon)
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(radians(aLat)) * Math.cos(radians(bLat)) * Math.sin(dLon / 2) ** 2
+  return 3958.7613 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
+}
+
+function operatingProximity(distance: number | null) {
+  if (distance === null) return 0
+  return distance <= 50 ? 20 : distance <= 100 ? 16 : distance <= 200 ? 12 : distance <= 300 ? 8 : distance <= 500 ? 4 : 0
+}
+
+async function callTool(name: string, a: Args): Promise<any> {
   validate(name, a)
   const trace_id = crypto.randomUUID(), generated_at = new Date().toISOString()
   const data_health = await rpc("mcp_data_health", {})
@@ -251,6 +300,65 @@ async function callTool(name: string, a: Args) {
       trace_id, generated_at, status: "in_coverage", coverage, data_health,
       cyclones, count: cyclones.length, evidence_domain: "nhc_tropical_cyclone",
       limitations: NHC_LIMITATIONS,
+    }
+  }
+  if (name === "rank_markets") {
+    const markets = a.markets as any[], base = a.operating_base as any
+    const evaluated = []
+    for (const market of markets) {
+      const assessment: any = await callTool("assess_location", {
+        latitude: market.latitude, longitude: market.longitude,
+        start_at: a.start_at, end_at: a.end_at, radius_miles: a.radius_miles ?? 10,
+      })
+      if (assessment.status !== "in_coverage") {
+        evaluated.push({
+          name: market.name, location: { latitude: market.latitude, longitude: market.longitude },
+          eligible: false, decision: "insufficient_evidence", final_score: null, rank: null,
+          coverage: assessment.coverage, message: COVERAGE_MESSAGE,
+        })
+        continue
+      }
+      const baseDistance = base ? distanceMiles(Number(base.latitude), Number(base.longitude), Number(market.latitude), Number(market.longitude)) : null
+      const evidencePoints = Math.round(Number(assessment.score) * 0.7)
+      const proximityPoints = operatingProximity(baseDistance)
+      const readinessPoints = data_health?.geography?.queue_status === "healthy" ? 10 : 5
+      const missingPenalty = base ? 0 : 5
+      const finalScore = Math.max(0, Math.min(100, evidencePoints + proximityPoints + readinessPoints - missingPenalty))
+      const decision = assessment.support_level === "insufficient" ? "insufficient_evidence" : finalScore >= 65 ? "prioritize" : finalScore >= 30 ? "monitor" : "insufficient_evidence"
+      evaluated.push({
+        name: market.name, location: { latitude: market.latitude, longitude: market.longitude, radius_miles: a.radius_miles ?? 10 },
+        eligible: true, decision, final_score: finalScore, rank: null,
+        support_level: assessment.support_level,
+        components: {
+          multihazard_evidence: { score: evidencePoints, max: 70, source_score: assessment.score },
+          operating_proximity: { score: proximityPoints, max: 20, straight_line_miles: baseDistance === null ? null : Math.round(baseDistance * 10) / 10 },
+          geographic_readiness: { score: readinessPoints, max: 10 },
+          missing_input_penalty: { score: -missingPenalty, operating_base_missing: !base },
+        },
+        evidence_components: assessment.components, hazards: assessment.hazards,
+        missing_data: [...(assessment.missing_data ?? []), ...(!base ? ["Operating base was not supplied; operational proximity could not be scored."] : [])],
+        rationale: decision === "prioritize" ? "Strongest combined support for investigation under the supplied evidence and operating constraints."
+          : decision === "monitor" ? "Some investigation support exists, but the evidence or operating fit is not strong enough to prioritize."
+          : "Current persisted evidence is insufficient for market prioritization.",
+      })
+    }
+    const ranked: any[] = evaluated.filter((item: any) => item.eligible).sort((left: any, right: any) => right.final_score - left.final_score || left.name.localeCompare(right.name))
+    ranked.forEach((item: any, index: number) => { item.rank = index + 1 })
+    const output = evaluated.sort((left: any, right: any) => (left.rank ?? 999) - (right.rank ?? 999) || left.name.localeCompare(right.name))
+    return {
+      trace_id, generated_at, status: ranked.length ? (ranked.length === markets.length ? "in_coverage" : "partial") : "insufficient_evidence",
+      coverage, data_health, methodology: {
+        id: "storm-signal-market-ranking-v1", version: 1,
+        component_maxima: { multihazard_evidence: 70, operating_proximity: 20, geographic_readiness: 10 },
+        decision_thresholds: { prioritize: 65, monitor: 30, insufficient_evidence: 0 },
+        distance_interpretation: "Operating proximity uses straight-line distance, not road distance or travel time.",
+      },
+      operating_base: base ?? null, markets: output, count: output.length,
+      limitations: [
+        ...LIMITATIONS,
+        "Rankings are relative investigation priorities, not leads, confirmed opportunities, route plans, or proof of damage.",
+        "NHC forecast evidence is not included in market-ranking points.",
+      ],
     }
   }
   const radius = Number(a.radius_miles ?? 10)

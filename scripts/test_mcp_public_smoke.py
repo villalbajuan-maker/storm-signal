@@ -51,7 +51,7 @@ def main() -> int:
     tools = rpc("tools/list", {}, 2)["result"]["tools"]
     require({tool["name"] for tool in tools} == {
         "search_storm_events", "get_storm_event", "assess_location", "summarize_storm_activity",
-        "search_tropical_cyclones",
+        "search_tropical_cyclones", "rank_markets",
     }, "public tool catalog changed")
     checks.append("tools_list")
 
@@ -85,6 +85,23 @@ def main() -> int:
     require(austin.get("support_level") in {"strong", "moderate", "limited", "insufficient"}, "support level missing")
     require("wind" in austin.get("hazards", {}) and "tornado" in austin.get("hazards", {}), "multihazard evidence missing")
     checks.append("multihazard_location_score")
+
+    ranking, error = call("rank_markets", {
+        "markets": [
+            {"name": "Austin", "latitude": 30.2672, "longitude": -97.7431},
+            {"name": "Brewster County signal", "latitude": 29.335, "longitude": -103.271785714},
+        ],
+        "operating_base": {"name": "Austin", "latitude": 30.2672, "longitude": -97.7431},
+        "start_at": (now - timedelta(days=2)).isoformat(), "end_at": now.isoformat(), "radius_miles": 10,
+    }, 11)
+    require(not error and ranking.get("status") == "in_coverage", "market ranking failed")
+    require(ranking.get("methodology", {}).get("id") == "storm-signal-market-ranking-v1", "market ranking methodology missing")
+    require(len(ranking.get("markets", [])) == 2, "market ranking candidate count changed")
+    require({item.get("decision") for item in ranking["markets"]} <= {
+        "prioritize", "monitor", "insufficient_evidence",
+    }, "market ranking emitted an unsupported decision")
+    require([item.get("rank") for item in ranking["markets"]] == [1, 2], "market ranking order is not deterministic")
+    checks.append("market_ranking")
 
     summary, error = call("summarize_storm_activity", {
         "start_at": (now - timedelta(days=30)).isoformat(),
