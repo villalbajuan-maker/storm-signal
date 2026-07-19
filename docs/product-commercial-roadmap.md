@@ -93,6 +93,8 @@ Commercial outcome strengthened: **Find the signal**.
 
 Integrate hazards in an evidence-aware sequence:
 
+The NHC persistence and evidence contract is frozen in [`nhc-data-contract.md`](nhc-data-contract.md); its four architecture decisions were approved on July 19, 2026. The next bounded tranche is the Supabase schema migration.
+
 1. Active NHC cyclone advisories, tracks, cones, watches and warnings.
 2. NHC 34-, 50- and 64-knot wind fields and wind-speed probabilities.
 3. NHC storm-surge watches, warnings, probabilities and potential flooding products.
