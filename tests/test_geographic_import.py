@@ -7,6 +7,9 @@ class GeographicImportTests(unittest.TestCase):
     def test_colorado_scope_uses_postal_abbreviation(self):
         self.assertEqual(STATE_ABBREVIATIONS["08"], "CO")
 
+    def test_kansas_scope_uses_postal_abbreviation(self):
+        self.assertEqual(STATE_ABBREVIATIONS["20"], "KS")
+
     def test_louisiana_scope_uses_postal_abbreviation(self):
         self.assertEqual(STATE_ABBREVIATIONS["22"], "LA")
 

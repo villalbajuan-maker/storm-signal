@@ -18,7 +18,7 @@ USER_AGENT = "storm-signal-census-importer/0.1 (https://vectoros.co)"
 VINTAGE = 2025
 TIGER_ROOT = "https://www2.census.gov/geo/tiger/TIGER2025"
 ZCTA_ENDPOINT = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/PUMA_TAD_TAZ_UGA_ZCTA/MapServer/4/query"
-STATE_ABBREVIATIONS = {"08": "CO", "12": "FL", "13": "GA", "22": "LA", "30": "MT", "37": "NC", "40": "OK", "48": "TX"}
+STATE_ABBREVIATIONS = {"08": "CO", "12": "FL", "13": "GA", "20": "KS", "22": "LA", "30": "MT", "37": "NC", "40": "OK", "48": "TX"}
 
 
 @dataclass(frozen=True)
