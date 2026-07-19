@@ -110,7 +110,7 @@ No hace falta contratar un conector genérico externo para las fuentes oficiales
 
 El MCP expone cuatro tools de solo lectura:
 
-1. `search_storm_events`: búsqueda por tiempo, tipo, estado/condado almacenado, magnitud de granizo, estado del evento y radio desde coordenadas.
+1. `search_storm_events`: búsqueda por tiempo, tipo, estado, condado de fuente o derivado, lugar Census, ZCTA, magnitud de granizo, estado del evento y radio desde coordenadas. Los resultados incluyen la geografía Census/PostGIS asociada.
 2. `get_storm_event`: detalle normalizado, versiones de evidencia cruda y geografía Census derivada.
 3. `assess_location`: evaluación determinista de evidencia para una coordenada, radio y ventana temporal.
 4. `summarize_storm_activity`: agregación por tipo, estado, condado o día.
@@ -118,7 +118,7 @@ El MCP expone cuatro tools de solo lectura:
 Limitaciones actuales:
 
 - `get_storm_event` ya presenta estado, condado, lugar y ZCTA derivados.
-- `search_storm_events` todavía no filtra por lugar Census o ZCTA derivados; usa los campos directos `state` y `county` del evento.
+- `search_storm_events` filtra por condado derivado, lugar Census y ZCTA; el condado mantiene compatibilidad con el valor original de la fuente y acepta nombres con o sin el sufijo `County`/`Parish`.
 - `assess_location` fue diseñado inicialmente alrededor de granizo y warnings; todavía no puntúa viento o tornado con un contrato comercial completo.
 - no existen tools deterministas para priorizar mercados, construir planes de campo o generar reportes persistentes.
 - `data_health` informa frescura meteorológica, cobertura temporal, los 12 estados geográficos, versión Census, estados de procesamiento, cola y alertas.
@@ -132,6 +132,8 @@ Limitaciones actuales:
 3. Registrar métricas y errores del enriquecimiento por corrida y mantener en cero el contador de eventos sin procesar.
 4. Extender `data_health` con estados cubiertos, eventos `complete`/`partial`/sin procesar y versión geográfica.
 5. Extender el MCP para buscar por condado derivado, lugar Census y ZCTA.
+
+Los cinco puntos quedaron completados el 19 de julio de 2026. La validación pública del punto 5 consultó simultáneamente `Bexar`, `San Antonio city` y `78251` a través de `mcp.vectoros.co`, recuperó eventos persistidos y devolvió condado, lugar, ZCTA, vintage 2025 y método `census-postgis-v1` en cada resultado.
 
 Este paso debe completarse antes de ampliar peligros: garantiza que toda fuente nueva llegue a la misma base territorial y sea consultable comercialmente.
 

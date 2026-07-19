@@ -23,12 +23,13 @@ def _schema(properties: dict[str, Any], required: list[str] | None = None) -> di
 TOOL_DEFINITIONS = [
     {
         "name": "search_storm_events",
-        "description": "Search persisted Storm Signal events by time, type, jurisdiction, hail size, status, or distance from a coordinate.",
+        "description": "Search persisted Storm Signal events by time, type, state, derived county, Census place, ZCTA, hail size, status, or distance from a coordinate.",
         "inputSchema": _schema({
             "start_at": {"type": "string", "format": "date-time"},
             "end_at": {"type": "string", "format": "date-time"},
             "event_types": {"type": "array", "items": {"type": "string", "enum": EVENT_TYPES}},
             "state": {"type": "string"}, "county": {"type": "string"},
+            "place": {"type": "string"}, "zcta": {"type": "string", "pattern": "^[0-9]{5}$"},
             "min_hail_inches": {"type": "number", "minimum": 0},
             "status": {"type": "string"},
             "latitude": {"type": "number", "minimum": -90, "maximum": 90},
@@ -148,7 +149,8 @@ class StormSignalTools:
         return {
             "p_start_at": a.get("start_at"), "p_end_at": a.get("end_at"),
             "p_event_types": a.get("event_types"), "p_state": a.get("state"),
-            "p_county": a.get("county"), "p_min_hail_inches": a.get("min_hail_inches"),
+            "p_county": a.get("county"), "p_place": a.get("place"), "p_zcta": a.get("zcta"),
+            "p_min_hail_inches": a.get("min_hail_inches"),
             "p_status": a.get("status"), "p_lat": a.get("latitude"), "p_lon": a.get("longitude"),
             "p_radius_miles": a.get("radius_miles"), "p_limit": a.get("limit", 50),
         }

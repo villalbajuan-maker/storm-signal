@@ -59,7 +59,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 
 ### Partially delivered
 
-- **Find the signal:** operational for current event types; geographic search and nationwide enrichment remain incomplete.
+- **Find the signal:** operational for current event types and the 12-state commercial geography; nationwide enrichment remains incomplete.
 - **Rank the markets:** an evidence score exists for a location, but a market-level commercial ranking contract is not yet complete.
 - **Build the field plan:** conversational design is defined; structured plan entities and generation are not yet implemented.
 - **Share the brief:** templates and output requirements are defined; production document generation and workspace persistence are not yet implemented.
@@ -84,7 +84,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 
    The initial 12-state commercial geography sequence is complete.
 2. Backfill every event without a geographic-processing status and enrich every new or updated event automatically — completed July 19, 2026 with zero pending at closure.
-3. Allow MCP searches by derived county, place and ZCTA.
+3. Allow MCP searches by derived county, place and ZCTA — completed July 19, 2026 and validated through the public MCP endpoint.
 4. Expose geographic coverage and gaps in `data_health` — completed July 19, 2026 with public queue and coverage validation.
 
 Commercial outcome strengthened: **Find the signal**.

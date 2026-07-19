@@ -87,6 +87,8 @@ The MCP initialization metadata advertises the Storm Signal logo through `server
 
 The server is stateless even though it issues session identifiers, so Cloud Run can safely use more than one instance. Each tool response includes a trace identifier, structured evidence, and explicit limitations. The location score is deterministic and never claims that a property was hit or damaged.
 
+`search_storm_events` accepts the persisted source fields plus derived Census/PostGIS filters: `county` matches either the source county or the derived county (with or without the `County`/`Parish` suffix), `place` matches the official Census place name, and `zcta` matches a five-digit Census ZCTA. Search results include their derived states, counties, places, ZCTAs, Census vintage, and method version. ZCTAs are approximate ZIP areas, not USPS delivery boundaries.
+
 Build locally with:
 
 ```bash

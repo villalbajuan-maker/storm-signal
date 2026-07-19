@@ -32,10 +32,11 @@ function schema(properties: Record<string, Json>, required: string[] = []) {
 const TOOLS = [
   {
     name: "search_storm_events",
-    description: "Search persisted Storm Signal events by time, type, jurisdiction, hail size, status, or distance from a coordinate.",
+    description: "Search persisted Storm Signal events by time, type, state, derived county, Census place, ZCTA, hail size, status, or distance from a coordinate.",
     inputSchema: schema({
       start_at: { type: "string", format: "date-time" }, end_at: { type: "string", format: "date-time" },
       event_types: { type: "array", items: { type: "string", enum: EVENT_TYPES } }, state: { type: "string" }, county: { type: "string" },
+      place: { type: "string" }, zcta: { type: "string", pattern: "^[0-9]{5}$" },
       min_hail_inches: { type: "number", minimum: 0 }, status: { type: "string" },
       latitude: { type: "number", minimum: -90, maximum: 90 }, longitude: { type: "number", minimum: -180, maximum: 180 },
       radius_miles: { type: "number", exclusiveMinimum: 0, maximum: 500 }, limit: { type: "integer", minimum: 1, maximum: 200, default: 50 },
@@ -90,7 +91,8 @@ function rpcError(id: unknown, code: number, message: string) {
 function searchParams(a: Args) {
   return {
     p_start_at: a.start_at ?? null, p_end_at: a.end_at ?? null, p_event_types: a.event_types ?? null,
-    p_state: a.state ?? null, p_county: a.county ?? null, p_min_hail_inches: a.min_hail_inches ?? null,
+    p_state: a.state ?? null, p_county: a.county ?? null, p_place: a.place ?? null, p_zcta: a.zcta ?? null,
+    p_min_hail_inches: a.min_hail_inches ?? null,
     p_status: a.status ?? null, p_lat: a.latitude ?? null, p_lon: a.longitude ?? null,
     p_radius_miles: a.radius_miles ?? null, p_limit: a.limit ?? 50,
   }

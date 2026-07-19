@@ -159,6 +159,17 @@ class MCPToolTests(unittest.TestCase):
         self.assertEqual(result["data_health"]["geography"]["queue_status"], "healthy")
         self.assertEqual(result["data_health"]["geography"]["covered_state_count"], 12)
 
+    def test_search_passes_derived_geography_filters(self):
+        database = FakeDatabase({"mcp_search_storm_events": []})
+        tools = StormSignalTools(database)
+        tools.call("search_storm_events", {
+            "county": "Pondera County", "place": "Ledger", "zcta": "59425"
+        })
+        params = next(parameters for name, parameters in database.calls if name == "mcp_search_storm_events")
+        self.assertEqual(params["p_county"], "Pondera County")
+        self.assertEqual(params["p_place"], "Ledger")
+        self.assertEqual(params["p_zcta"], "59425")
+
 
 if __name__ == "__main__":
     unittest.main()
