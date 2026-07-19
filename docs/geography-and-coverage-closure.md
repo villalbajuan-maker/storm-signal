@@ -1,7 +1,7 @@
 # Storm Signal — Cierre geográfico y estado de cobertura
 
 **Fecha de corte:** 19 de julio de 2026  
-**Estado:** geografía comercial inicial completada; expansión de amenazas y experiencia comercial pendiente
+**Estado:** geografía comercial inicial completada; plan siguiente congelado en el orden de este documento
 
 ## Resumen ejecutivo
 
@@ -127,13 +127,15 @@ Limitaciones actuales:
 
 ### Prioridad 1 — cerrar la unión automática entre clima y geografía
 
-1. Ejecutar enriquecimiento PostGIS automáticamente después de cada upsert de eventos.
-2. Registrar métricas y errores del enriquecimiento por corrida.
-3. Reprocesar los 14 eventos pendientes y mantener el contador en cero.
+1. Ejecutar un backfill único e idempotente de todos los eventos que no tengan estado geográfico para la versión vigente; al corte existen 14 pendientes.
+2. Ejecutar enriquecimiento PostGIS automáticamente después de cada upsert de eventos nuevos o actualizados.
+3. Registrar métricas y errores del enriquecimiento por corrida y mantener en cero el contador de eventos sin procesar.
 4. Extender `data_health` con estados cubiertos, eventos `complete`/`partial`/sin procesar y versión geográfica.
 5. Extender el MCP para buscar por condado derivado, lugar Census y ZCTA.
 
 Este paso debe completarse antes de ampliar peligros: garantiza que toda fuente nueva llegue a la misma base territorial y sea consultable comercialmente.
+
+El backfill no inventa cobertura ni fuerza asociaciones. Un evento fuera de los 12 estados cargados, o sin geometría suficiente, debe quedar procesado con estado `partial` o `insufficient_geometry`; el objetivo de cero aplica a eventos sin procesar, no a eliminar resultados parciales honestos.
 
 ### Prioridad 2 — completar tormentas severas
 

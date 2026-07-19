@@ -1,6 +1,6 @@
 # Storm Signal — Product and Commercial Roadmap
 
-**Status:** ACTIVE PRODUCT AUTHORITY  
+**Status:** ACTIVE PRODUCT AUTHORITY — ORDER FROZEN
 **Baseline date:** July 19, 2026  
 **Commercial scope:** V1 FROZEN
 
@@ -83,7 +83,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
    - South Carolina — geography imported and audited; no persisted South Carolina events currently await enrichment.
 
    The initial 12-state commercial geography sequence is complete.
-2. Make new-event geographic enrichment automatic and observable.
+2. Backfill every event without a geographic-processing status, then make enrichment automatic and observable for every new or updated event.
 3. Allow MCP searches by derived county, place and ZCTA.
 4. Expose geographic coverage and gaps in `data_health`.
 
