@@ -2,7 +2,7 @@ import json
 import unittest
 from datetime import date
 
-from storm_signal_recon.sources import SPC_URL, Snapshot, default_historical_year, discover_ncei_details_file, field_inventory, parse_records
+from storm_signal_recon.sources import SPC_URL, Snapshot, default_historical_year, discover_ncei_details_file, discover_spc_cycle_date, field_inventory, parse_records
 from storm_signal_recon.normalize import ncei_time, normalize_snapshot, spc_cycle_date, spc_report_time
 
 
@@ -32,6 +32,16 @@ class SourceTests(unittest.TestCase):
         cycle = spc_cycle_date("today", "2026-07-19T07:00:00+00:00")
         self.assertEqual(cycle, date(2026, 7, 18))
         self.assertEqual(spc_report_time(cycle, "0010").isoformat(), "2026-07-19T00:10:00+00:00")
+
+    def test_spc_cycle_comes_from_published_page_not_retrieval_clock(self):
+        html = "Today's Storm Reports (20260719 1200 UTC - 20260720 1159 UTC)"
+        self.assertEqual(discover_spc_cycle_date(html), date(2026, 7, 19))
+        snap = Snapshot(
+            "spc_hail_2026-07-18", "https://example.test", "2026-07-19T14:00:00+00:00", "text/csv",
+            b"Time,Size,Location,County,State,Lat,Lon,Comments\n0010,100,Here,Pondera,MT,48.3,-111.95,Observed\n",
+        )
+        _, event = normalize_snapshot(snap)[0]
+        self.assertEqual(event["started_at"], "2026-07-19T00:10:00+00:00")
 
     def test_ncei_fixed_offset_is_preserved(self):
         self.assertEqual(ncei_time("02-MAR-25 14:15:00", "CST-6").isoformat(), "2025-03-02T14:15:00-06:00")

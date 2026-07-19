@@ -1,5 +1,6 @@
 const NWS_URL = "https://api.weather.gov/alerts/active"
 const SPC_URL = (day: string) => `https://www.spc.noaa.gov/climo/reports/${day}_hail.csv`
+const SPC_PAGE_URL = (day: string) => `https://www.spc.noaa.gov/climo/reports/${day}.html`
 const USER_AGENT = "storm-signal-ingestor/0.2 (contact: https://vectoros.co)"
 
 type Row = Record<string, any>
@@ -44,11 +45,10 @@ function parseCsv(text: string): Row[] {
   return rows.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])))
 }
 
-function cycleDate(day: string, retrieved: Date): Date {
-  const cycle = new Date(Date.UTC(retrieved.getUTCFullYear(), retrieved.getUTCMonth(), retrieved.getUTCDate()))
-  if (retrieved.getUTCHours() < 12) cycle.setUTCDate(cycle.getUTCDate() - 1)
-  if (day === "yesterday") cycle.setUTCDate(cycle.getUTCDate() - 1)
-  return cycle
+function cycleDateFromPage(html: string): Date {
+  const match = html.match(/Storm Reports \((\d{4})(\d{2})(\d{2})\s+1200 UTC/i)
+  if (!match) throw new Error("SPC report page did not expose its convective cycle date")
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])))
 }
 
 function reportTime(cycle: Date, hhmm: string): string {
@@ -90,10 +90,13 @@ async function fetchNws(): Promise<Pair[]> {
 }
 
 async function fetchSpcDay(day: string): Promise<Pair[]> {
+  const pageResponse = await fetch(SPC_PAGE_URL(day), { headers: { Accept: "text/html", "User-Agent": USER_AGENT } })
+  if (!pageResponse.ok) throw new Error(`SPC ${day} page ${pageResponse.status}`)
+  const cycle = cycleDateFromPage(await pageResponse.text())
   const sourceUrl = SPC_URL(day)
   const response = await fetch(sourceUrl, { headers: { Accept: "text/csv", "User-Agent": USER_AGENT } })
   if (!response.ok) throw new Error(`SPC ${day} ${response.status}`)
-  const retrieved = new Date(), retrievedAt = retrieved.toISOString(), cycle = cycleDate(day, retrieved)
+  const retrievedAt = new Date().toISOString()
   const pairs: Pair[] = []
   for (const record of parseCsv(await response.text())) {
     if (!record.Time || !record.Lat || !record.Lon || !record.Size) continue

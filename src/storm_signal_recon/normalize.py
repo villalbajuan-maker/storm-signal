@@ -47,8 +47,8 @@ def normalize_snapshot(snapshot: Snapshot) -> list[tuple[dict[str, Any], dict[st
     if snapshot.source == "nws_alerts":
         return [pair for record in records if (pair := normalize_nws(record, snapshot))]
     if snapshot.source.startswith("spc_hail_"):
-        day = snapshot.source.removeprefix("spc_hail_")
-        cycle = spc_cycle_date(day, snapshot.retrieved_at)
+        cycle_token = snapshot.source.removeprefix("spc_hail_")
+        cycle = date.fromisoformat(cycle_token) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", cycle_token) else spc_cycle_date(cycle_token, snapshot.retrieved_at)
         return [normalize_spc(record, snapshot, cycle) for record in records]
     if snapshot.source == "noaa_storm_events_hail":
         return [normalize_ncei(record, snapshot) for record in records]
@@ -155,4 +155,3 @@ def _raw_record(source: str, source_id: str, record: dict[str, Any], snapshot: S
         "payload_hash": canonical_hash(record),
         "source_url": snapshot.source_url,
     }
-

@@ -14,6 +14,7 @@ from typing import Any, Iterable
 
 NWS_ALERTS_URL = "https://api.weather.gov/alerts/active"
 SPC_URL = "https://www.spc.noaa.gov/climo/reports/{day}_hail.csv"
+SPC_PAGE_URL = "https://www.spc.noaa.gov/climo/reports/{day}.html"
 NCEI_INDEX_URL = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/"
 USER_AGENT = "storm-signal-recon/0.1 (data-reconnaissance prototype)"
 
@@ -48,8 +49,17 @@ def fetch_nws_alerts() -> Snapshot:
 def fetch_spc_hail(day: str) -> Snapshot:
     if day not in {"today", "yesterday"}:
         raise ValueError("SPC day must be 'today' or 'yesterday'")
+    page = fetch(SPC_PAGE_URL.format(day=day), "text/html")
+    cycle = discover_spc_cycle_date(page.body.decode("iso-8859-1", "replace"))
     snap = fetch(SPC_URL.format(day=day), "text/csv")
-    return Snapshot(f"spc_hail_{day}", snap.source_url, snap.retrieved_at, snap.content_type, snap.body)
+    return Snapshot(f"spc_hail_{cycle.isoformat()}", snap.source_url, snap.retrieved_at, snap.content_type, snap.body)
+
+
+def discover_spc_cycle_date(page_html: str) -> date:
+    match = re.search(r"Storm Reports \((\d{4})(\d{2})(\d{2})\s+1200 UTC", page_html, re.IGNORECASE)
+    if not match:
+        raise RuntimeError("SPC report page did not expose its convective cycle date")
+    return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
 
 
 def discover_ncei_details_file(index_html: str, year: int) -> str:
