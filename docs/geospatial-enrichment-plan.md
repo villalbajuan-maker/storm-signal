@@ -1,5 +1,7 @@
 # Geospatial enrichment plan
 
+The implementation-facing mini-contract is [`geospatial-data-contract.md`](geospatial-data-contract.md).
+
 ## Product outcome
 
 Turn persisted weather evidence into auditable territories that a commercial team can investigate:
