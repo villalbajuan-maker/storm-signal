@@ -111,6 +111,8 @@ Source identifiers should be used as follows:
 
 All normalized geometry should use PostGIS SRID 4326. Preserve source geometry unchanged in `source_records`; derived centroids and distance calculations must be marked as derived.
 
+The next product increment is the versioned Census boundary and territorial enrichment layer documented in [`docs/geospatial-enrichment-plan.md`](docs/geospatial-enrichment-plan.md). It will map event points and polygons to counties, Census places, and ZCTAs while preserving the difference between observed points, warning areas, and approximate ZIP areas.
+
 ## Proposed normalized model
 
 [`schema.sql`](schema.sql) defines the three POC tables: immutable raw `source_records`, queryable `storm_events`, and operational `ingestion_runs`. Two details are intentional:
