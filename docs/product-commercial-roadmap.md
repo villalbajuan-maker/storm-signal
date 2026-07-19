@@ -6,6 +6,8 @@
 
 This document keeps product promise, technical delivery, geographic expansion and hazard expansion on one front. Implementation work must strengthen one of the four frozen commercial outcomes; otherwise it belongs in the post-V1 backlog.
 
+The product and architecture doctrine for using conversation as the primary operating surface is frozen in [`conversational-operating-model.md`](conversational-operating-model.md). All workspace, LLM, MCP, backend, and artifact decisions must preserve that operating model.
+
 ## Commercial promise
 
 > Storm Signal helps roofing and restoration companies decide where to investigate, why it matters, and what to do next after severe weather.
