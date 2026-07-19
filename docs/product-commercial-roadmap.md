@@ -85,7 +85,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
    The initial 12-state commercial geography sequence is complete.
 2. Backfill every event without a geographic-processing status and enrich every new or updated event automatically — completed July 19, 2026 with zero pending at closure.
 3. Allow MCP searches by derived county, place and ZCTA.
-4. Expose geographic coverage and gaps in `data_health`.
+4. Expose geographic coverage and gaps in `data_health` — completed July 19, 2026 with public queue and coverage validation.
 
 Commercial outcome strengthened: **Find the signal**.
 

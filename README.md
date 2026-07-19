@@ -64,7 +64,7 @@ limit 20;
 
 Every live NWS/SPC upsert now sends the exact created or updated event IDs through the versioned Census/PostGIS enrichment phase. Weather ingestion and derived geography have independent outcomes: a geographic failure is recorded in the same run without discarding successfully persisted source evidence.
 
-Every MCP tool response also includes `data_health`: source freshness, the latest ingestion outcome, and current geographic/time coverage. This prevents an empty result from being presented as proof that no severe weather occurred when the relevant source is stale or has not been ingested.
+Every MCP tool response also includes `data_health`: source freshness, the latest ingestion outcome, current geographic/time coverage, the Census vintage and method version, the 12 covered states, geographic processing counts, queue health, and actionable alerts. This prevents an empty result from being presented as proof that no severe weather occurred when the relevant source is stale, has not been ingested, or is still awaiting geographic processing. Audited territorial counts are persisted in `geographic_coverage_summary` so MCP calls do not recalculate thousands of polygon intersections.
 
 The GitHub Actions workflow in `.github/workflows/ingest.yml` remains available for manual recovery and the bounded Texas/Oklahoma historical refresh. It requires repository secrets named `SUPABASE_URL` and `SUPABASE_SECRET_KEY`.
 

@@ -142,6 +142,12 @@ class MCPToolTests(unittest.TestCase):
         health = {
             "sources": [{"source": "spc_reports", "freshness_status": "fresh"}],
             "coverage": {"states_with_recent_reports": 6},
+            "geography": {
+                "queue_status": "healthy", "vintage": 2025,
+                "method_version": "census-postgis-v1",
+                "covered_state_count": 12,
+                "event_processing": {"pending": 0},
+            },
         }
         tools = StormSignalTools(FakeDatabase({
             "mcp_data_health": health,
@@ -150,6 +156,8 @@ class MCPToolTests(unittest.TestCase):
         result = tools.call("search_storm_events", {})
         self.assertEqual(result["count"], 0)
         self.assertEqual(result["data_health"], health)
+        self.assertEqual(result["data_health"]["geography"]["queue_status"], "healthy")
+        self.assertEqual(result["data_health"]["geography"]["covered_state_count"], 12)
 
 
 if __name__ == "__main__":

@@ -121,7 +121,7 @@ Limitaciones actuales:
 - `search_storm_events` todavía no filtra por lugar Census o ZCTA derivados; usa los campos directos `state` y `county` del evento.
 - `assess_location` fue diseñado inicialmente alrededor de granizo y warnings; todavía no puntúa viento o tornado con un contrato comercial completo.
 - no existen tools deterministas para priorizar mercados, construir planes de campo o generar reportes persistentes.
-- `data_health` informa frescura meteorológica general, pero todavía no expone claramente cobertura y pendientes de geografía por estado.
+- `data_health` informa frescura meteorológica, cobertura temporal, los 12 estados geográficos, versión Census, estados de procesamiento, cola y alertas.
 
 ## 6. Qué sigue: orden recomendado
 
@@ -194,3 +194,22 @@ El 19 de julio de 2026 la Edge Function de ingesta quedó enlazada con `enrich_i
 - Corte de cierre: 1.488 eventos persistidos y 0 eventos sin procesamiento geográfico.
 
 La Edge Function desplegada conserva el cron NWS de 5 minutos y el cron SPC de 10 minutos. El siguiente trabajo es el Tramo 3: exponer esta observabilidad de forma consolidada en `data_health`.
+
+### Tramo 3 — Observabilidad: completado
+
+El 19 de julio de 2026 `mcp_data_health` incorporó un bloque geográfico versionado y visible en todas las respuestas de tools:
+
+- Census vintage 2025 y método `census-postgis-v1`;
+- los 12 estados auditados con condados, lugares y ZCTAs que intersectan cada territorio;
+- eventos `complete`, `partial`, `insufficient_geometry` y pendientes;
+- última fase geográfica NWS/SPC con eventos procesados, asociaciones y error;
+- `queue_status` y alertas accionables.
+
+La primera versión recalculaba intersecciones ZCTA en cada llamada y excedió el tiempo de la Edge Function. Se corrigió persistiendo el inventario auditado en `geographic_coverage_summary`; los conteos dinámicos de eventos y cola continúan calculándose en tiempo real.
+
+La prueba pública en `mcp.vectoros.co` observó correctamente dos estados de la misma corrida SPC:
+
+1. mientras la corrida estaba activa: `degraded`, 1 pendiente y alerta de cola;
+2. al finalizar: `healthy`, 0 pendientes, 473 eventos procesados y alertas vacías.
+
+El siguiente trabajo es el Tramo 4: búsqueda MCP por condado derivado, lugar Census y ZCTA.
