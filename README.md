@@ -41,7 +41,24 @@ PYTHONPATH=src python -m storm_signal_recon.ingest --source all
 
 Never commit the secret key. The ingestor uses it only from the process environment and sends modern `sb_secret_...` credentials solely in the `apikey` header. Legacy `SUPABASE_SERVICE_ROLE_KEY` remains a temporary fallback. Every source collection creates an `ingestion_runs` row, versions raw records by canonical payload hash, and upserts the current normalized event by source identity.
 
-The GitHub Actions workflow in `.github/workflows/ingest.yml` runs NWS every 5 minutes, SPC every 10 minutes, and the bounded Texas/Oklahoma historical refresh weekly. It requires repository secrets named `SUPABASE_URL` and `SUPABASE_SECRET_KEY`.
+Live ingestion is scheduled inside Supabase with `pg_cron` and `pg_net`: NWS runs every 5 minutes and SPC runs every 10 minutes. The migration stores the project URL in Vault and expects an encrypted Vault secret named `storm_signal_cron_secret`; the same value must be configured as the `INGEST_CRON_SECRET` Edge Function secret. Requests without the matching `x-storm-signal-cron` header are rejected. Deploy the function with:
+
+```bash
+supabase functions deploy storm_signal_ingestor --no-verify-jwt
+supabase db push
+```
+
+The Edge Function accepts only `POST` requests with `{"source":"nws"}` or `{"source":"spc"}`. It records every attempt in `ingestion_runs`, versions raw source evidence, and idempotently updates normalized events. Check recent automation health with:
+
+```sql
+select source, status, started_at, completed_at,
+       records_received, records_created, records_updated, error_message
+from public.ingestion_runs
+order by started_at desc
+limit 20;
+```
+
+The GitHub Actions workflow in `.github/workflows/ingest.yml` remains available for manual recovery and the bounded Texas/Oklahoma historical refresh. It requires repository secrets named `SUPABASE_URL` and `SUPABASE_SECRET_KEY`.
 
 ## Run the MCP server
 

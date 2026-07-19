@@ -23,3 +23,6 @@ sql_paths = []
 
 [functions.storm_signal_mcp]
 verify_jwt = false
+
+[functions.storm_signal_ingestor]
+verify_jwt = false
