@@ -21,3 +21,5 @@ schema_paths = []
 enabled = false
 sql_paths = []
 
+[functions.storm_signal_mcp]
+verify_jwt = false
