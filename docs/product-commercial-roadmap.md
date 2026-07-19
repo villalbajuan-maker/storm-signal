@@ -83,7 +83,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
    - South Carolina — geography imported and audited; no persisted South Carolina events currently await enrichment.
 
    The initial 12-state commercial geography sequence is complete.
-2. Backfill every event without a geographic-processing status, then make enrichment automatic and observable for every new or updated event.
+2. Backfill every event without a geographic-processing status — completed July 19, 2026 with zero pending at closure — then make enrichment automatic and observable for every new or updated event.
 3. Allow MCP searches by derived county, place and ZCTA.
 4. Expose geographic coverage and gaps in `data_health`.
 

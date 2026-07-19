@@ -167,3 +167,17 @@ El backfill no inventa cobertura ni fuerza asociaciones. Un evento fuera de los 
 ## Decisión recomendada
 
 El siguiente sprint debe cerrar primero la automatización geográfica y la consulta MCP por lugar/ZCTA. Inmediatamente después conviene implementar NHC como la siguiente familia de conectores, seguida por NWPS/National Water Model. Así, cada peligro nuevo entra sobre una arquitectura territorial ya automática y puede alimentar directamente la promesa comercial, sin crear otra isla de datos.
+
+## Registro de ejecución del sprint
+
+### Tramo 1 — Backfill geográfico: completado
+
+El 19 de julio de 2026 se desplegó `backfill_unprocessed_storm_event_geographies`, una operación idempotente que selecciona exclusivamente eventos sin estado de procesamiento para la versión geográfica vigente.
+
+- Primera ejecución: 16 eventos procesados; 2 `complete` y 14 `partial`.
+- Segunda ejecución de control: capturó 2 eventos creados por la ingesta concurrente; 1 `complete` y 1 `partial`.
+- Corte final: 1.485 eventos, 1.068 `complete`, 417 `partial`, 0 `insufficient_geometry` y 0 sin procesar.
+- Un resultado `complete` exige asociaciones de estado, condado y ZCTA; el lugar Census es opcional.
+- La operación con arreglo vacío permanece acotada y nunca se interpreta como reprocesamiento de todos los eventos.
+
+La aparición de eventos entre dos ejecuciones confirma la necesidad del Tramo 2: encadenar el enriquecimiento automáticamente a la ingesta.
