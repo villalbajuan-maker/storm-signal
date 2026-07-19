@@ -14,6 +14,12 @@ Storm Signal converts recent severe-weather evidence into an explainable, sharea
 
 It does not promise property damage, leads, contracts or revenue.
 
+### Frozen product guiding question
+
+> **¿A dónde vale la pena ir hoy, dadas las señales meteorológicas, nuestra ubicación, la cuadrilla y el tiempo disponible?**
+
+This is the canonical guiding question for product, MCP, workspace, landing-page, and roadmap decisions. Storm Signal must help the user combine four inputs—weather signals, starting location, crew capacity, and available time—into an explainable recommendation about where it is worth going, followed by a practical field plan. It may help users look for work while preserving the existing responsible-use limits; it does not need to guarantee an outcome to make a useful recommendation.
+
 ## Frozen V1 outcomes
 
 ### 1. Find the signal
