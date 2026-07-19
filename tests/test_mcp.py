@@ -82,6 +82,22 @@ class MCPTransportTests(unittest.TestCase):
         self.assertTrue(body["result"]["isError"])
         self.assertIn("trace_id", body["result"]["structuredContent"])
 
+    def test_successful_tool_has_readable_text_fallback(self):
+        database = FakeDatabase({"mcp_get_storm_event": {
+            "event": {"id": "0e8f6a0d-f364-4cdd-8e32-f4c18fed8a64", "county": "Pondera"},
+            "source_versions": [],
+        }})
+        app = MCPApplication(StormSignalTools(database))
+        _, _, body = asyncio.run(request(app, "POST", "/mcp", {
+            "jsonrpc": "2.0", "id": 4, "method": "tools/call",
+            "params": {"name": "get_storm_event", "arguments": {
+                "event_id": "0e8f6a0d-f364-4cdd-8e32-f4c18fed8a64"
+            }},
+        }))
+        text = body["result"]["content"][0]["text"]
+        self.assertIn("Pondera", text)
+        self.assertIn("0e8f6a0d-f364-4cdd-8e32-f4c18fed8a64", text)
+
 
 class MCPToolTests(unittest.TestCase):
     def test_assessment_is_deterministic_and_honest(self):

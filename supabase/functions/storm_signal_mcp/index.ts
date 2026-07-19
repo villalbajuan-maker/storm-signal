@@ -181,7 +181,17 @@ Deno.serve(async (req) => {
   if (message.method === "tools/call") {
     try {
       const output = await callTool(String(message.params?.name ?? ""), message.params?.arguments ?? {})
-      return response({ jsonrpc: "2.0", id: message.id, result: { content: [{ type: "text", text: `Storm Signal completed ${message.params?.name} (trace ${output.trace_id}).` }], structuredContent: output, isError: false } })
+      return response({
+        jsonrpc: "2.0",
+        id: message.id,
+        result: {
+          // Some MCP hosts currently ignore structuredContent unless a tool
+          // also supplies a useful text fallback. Keep both representations.
+          content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+          structuredContent: output,
+          isError: false,
+        },
+      })
     } catch (error) {
       const text = error instanceof Error ? error.message : "Unknown tool error"
       return response({ jsonrpc: "2.0", id: message.id, result: { content: [{ type: "text", text: `Tool call failed: ${text}` }], structuredContent: { trace_id: crypto.randomUUID(), error: text }, isError: true } })

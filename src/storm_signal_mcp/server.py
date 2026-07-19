@@ -94,7 +94,7 @@ class MCPApplication:
             params = request.get("params") or {}
             try:
                 output = self.tools.call(params.get("name", ""), params.get("arguments") or {})
-                text = f"Storm Signal completed {params.get('name')} (trace {output['trace_id']})."
+                text = json.dumps(output, ensure_ascii=False, indent=2)
                 result = {"content": [{"type": "text", "text": text}], "structuredContent": output, "isError": False}
             except Exception as exc:
                 trace = str(uuid.uuid4())
