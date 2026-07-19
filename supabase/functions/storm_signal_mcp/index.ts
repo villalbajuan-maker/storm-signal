@@ -61,7 +61,7 @@ const TOOLS = [
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-  "Access-Control-Allow-Headers": "content-type, accept, mcp-session-id, mcp-protocol-version",
+  "Access-Control-Allow-Headers": "authorization, x-api-key, content-type, accept, mcp-session-id, mcp-protocol-version",
   "Access-Control-Expose-Headers": "mcp-session-id",
 }
 
@@ -151,7 +151,9 @@ Deno.serve(async (req) => {
   const path = new URL(req.url).pathname
   if (req.method === "OPTIONS") return response(null, 204)
   if (req.method === "GET" && path.endsWith("/health")) return response({ status: "ok", server: SERVER_INFO })
-  if (req.method === "GET") return response({ error: "SSE stream not supported" }, 405, { Allow: "POST, OPTIONS" })
+  // Claude probes the MCP URL before initialize. A body on this 405 has caused
+  // its connector registration to enter OAuth discovery for no-auth spikes.
+  if (req.method === "GET") return new Response(null, { status: 405, headers: { ...cors, Allow: "POST" } })
   if (req.method !== "POST") return response({ error: "Method not allowed" }, 405)
   let message: any
   try { message = await req.json() } catch { return response(rpcError(null, -32700, "Parse error"), 400) }
