@@ -71,7 +71,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 1. Expand Census/PostGIS coverage in this order:
    - Montana — complete pilot.
    - Texas — geography imported, audited and applied to existing events.
-   - Florida.
+   - Florida — geography imported, audited and applied to existing events.
    - Louisiana.
    - Georgia.
    - North Carolina.
