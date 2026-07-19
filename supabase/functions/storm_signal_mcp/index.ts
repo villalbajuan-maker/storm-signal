@@ -19,6 +19,9 @@ const LIMITATIONS = [
   "Historical coordinates can be approximate or absent.",
   "This evidence does not establish property damage, roof condition, or sales qualification.",
 ]
+const COVERAGE_MESSAGE = "This location is not yet part of Storm Signal's controlled demo coverage. We currently provide commercial analysis for Texas, Florida, Louisiana, Georgia, and North Carolina. Coverage for additional states is coming soon."
+const IN_COVERAGE_MESSAGE = "This request is within Storm Signal's controlled demo coverage for Texas, Florida, Louisiana, Georgia, and North Carolina."
+const WINDOW_DAYS = 14
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
 type Args = Record<string, unknown>
@@ -32,7 +35,7 @@ function schema(properties: Record<string, Json>, required: string[] = []) {
 const TOOLS = [
   {
     name: "search_storm_events",
-    description: "Search persisted Storm Signal events by time, type, state, derived county, Census place, ZCTA, hail size, status, or distance from a coordinate.",
+    description: "Search recent events within the controlled demo coverage: Texas, Florida, Louisiana, Georgia, and North Carolina. Searches without a location default to all five states; the available evidence window is 14 days.",
     inputSchema: schema({
       start_at: { type: "string", format: "date-time" }, end_at: { type: "string", format: "date-time" },
       event_types: { type: "array", items: { type: "string", enum: EVENT_TYPES } }, state: { type: "string" }, county: { type: "string" },
@@ -45,13 +48,13 @@ const TOOLS = [
   },
   {
     name: "get_storm_event",
-    description: "Get one normalized event with retained source payload versions, Census geography when available, and evidence limitations.",
+    description: "Get one normalized event only when it belongs to the five-state controlled demo coverage, with retained source payload versions, Census geography, and evidence limitations.",
     inputSchema: schema({ event_id: { type: "string", format: "uuid" } }, ["event_id"]),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
     name: "assess_location",
-    description: "Produce a deterministic evidence score for a location and time window. It never claims that a property was hit or damaged.",
+    description: "Produce a deterministic evidence score for a covered location in TX, FL, LA, GA, or NC over the available 14-day window. It never claims that a property was hit or damaged.",
     inputSchema: schema({
       latitude: { type: "number", minimum: -90, maximum: 90 }, longitude: { type: "number", minimum: -180, maximum: 180 },
       start_at: { type: "string", format: "date-time" }, end_at: { type: "string", format: "date-time" },
@@ -61,7 +64,7 @@ const TOOLS = [
   },
   {
     name: "summarize_storm_activity",
-    description: "Aggregate persisted storm activity by event type, state, county, or UTC day for a bounded time window.",
+    description: "Aggregate storm activity only for TX, FL, LA, GA, and NC. Unlocated requests default to all five states, and requested windows are limited to the latest 14 days.",
     inputSchema: schema({
       start_at: { type: "string", format: "date-time" }, end_at: { type: "string", format: "date-time" },
       group_by: { type: "string", enum: ["event_type", "state", "county", "day"], default: "event_type" },
@@ -137,23 +140,61 @@ function presentGeography(value: any) {
   }
 }
 
+function effectiveWindow(a: Args) {
+  const now = new Date()
+  const availableStart = new Date(now.getTime() - WINDOW_DAYS * 86400000)
+  const requestedStart = a.start_at ? new Date(String(a.start_at)) : null
+  const requestedEnd = a.end_at ? new Date(String(a.end_at)) : null
+  const effectiveStart = requestedStart && requestedStart > availableStart ? requestedStart : availableStart
+  const effectiveEnd = requestedEnd && requestedEnd < now ? requestedEnd : now
+  return {
+    requested_start_at: requestedStart?.toISOString() ?? null,
+    requested_end_at: requestedEnd?.toISOString() ?? null,
+    effective_start_at: effectiveStart.toISOString(),
+    effective_end_at: effectiveEnd.toISOString(),
+    available_window_days: WINDOW_DAYS,
+    truncated: Boolean((requestedStart && requestedStart < availableStart) || (requestedEnd && requestedEnd > now)),
+    defaulted: !requestedStart || !requestedEnd,
+  }
+}
+
+function unavailable(trace_id: string, generated_at: string, data_health: any, coverage: any, window: any) {
+  return {
+    trace_id, generated_at, status: coverage?.status ?? "out_of_coverage",
+    message: COVERAGE_MESSAGE, coverage, window, data_health,
+    events: [], count: 0, limitations: LIMITATIONS,
+  }
+}
+
+function presentCoverage(value: any) {
+  return { ...value, message: value?.status === "in_coverage" ? IN_COVERAGE_MESSAGE : COVERAGE_MESSAGE }
+}
+
 async function callTool(name: string, a: Args) {
   validate(name, a)
   const trace_id = crypto.randomUUID(), generated_at = new Date().toISOString()
   const data_health = await rpc("mcp_data_health", {})
-  if (name === "search_storm_events") {
-    const events = await rpc("mcp_search_storm_events", searchParams({ ...a, radius_miles: a.radius_miles ?? (a.latitude !== undefined ? 10 : null) })) ?? []
-    return { trace_id, generated_at, data_health, events, count: events.length, limitations: LIMITATIONS }
-  }
+  const window = effectiveWindow(a)
   if (name === "get_storm_event") {
+    const coverage = presentCoverage(await rpc("mcp_check_event_coverage", { p_event_id: a.event_id }))
+    if (coverage?.status === "not_found") throw new Error("Storm event not found")
+    if (coverage?.status !== "in_coverage") return unavailable(trace_id, generated_at, data_health, coverage, null)
     const data = await rpc("mcp_get_storm_event", { p_event_id: a.event_id })
     if (!data) throw new Error("Storm event not found")
     const geography = presentGeography(await rpc("mcp_get_event_geographies", { p_event_id: a.event_id }))
-    return { trace_id, generated_at, data_health, ...data, geography, limitations: LIMITATIONS }
+    return { trace_id, generated_at, status: "in_coverage", coverage, data_health, ...data, geography, limitations: LIMITATIONS }
+  }
+  const coverage = presentCoverage(await rpc("mcp_check_coverage", {
+    p_state: a.state ?? null, p_lat: a.latitude ?? null, p_lon: a.longitude ?? null,
+  }))
+  if (coverage?.status !== "in_coverage") return unavailable(trace_id, generated_at, data_health, coverage, window)
+  if (name === "search_storm_events") {
+    const events = await rpc("mcp_search_storm_events", searchParams({ ...a, radius_miles: a.radius_miles ?? (a.latitude !== undefined ? 10 : null) })) ?? []
+    return { trace_id, generated_at, status: "in_coverage", coverage, window, data_health, events, count: events.length, limitations: LIMITATIONS }
   }
   if (name === "summarize_storm_activity") {
     const groups = await rpc("mcp_summarize_storm_activity", { p_start_at: a.start_at, p_end_at: a.end_at, p_group_by: a.group_by ?? "event_type", p_state: a.state ?? null, p_event_types: a.event_types ?? null }) ?? []
-    return { trace_id, generated_at, data_health, groups, group_by: a.group_by ?? "event_type", limitations: LIMITATIONS }
+    return { trace_id, generated_at, status: "in_coverage", coverage, window, data_health, groups, group_by: a.group_by ?? "event_type", limitations: LIMITATIONS }
   }
   const radius = Number(a.radius_miles ?? 10)
   const events = await rpc("mcp_search_storm_events", searchParams({ ...a, radius_miles: radius, limit: 200 })) ?? []
@@ -172,7 +213,7 @@ async function callTool(name: string, a: Args) {
   return {
     trace_id, generated_at, data_health,
     location: { latitude: a.latitude, longitude: a.longitude, radius_miles: radius },
-    window: { start_at: a.start_at, end_at: a.end_at }, score,
+    status: "in_coverage", coverage, window, score,
     classification: score >= 60 ? "strong" : score >= 25 ? "moderate" : "limited",
     score_reasons, evidence: { warnings, hail_reports: reports, historical_hail_events: historical }, limitations: LIMITATIONS,
   }
@@ -193,7 +234,7 @@ Deno.serve(async (req) => {
   if (message.method === "initialize") return response({
     jsonrpc: "2.0", id: message.id, result: {
       protocolVersion: PROTOCOL_VERSION, capabilities: { tools: { listChanged: false } }, serverInfo: SERVER_INFO,
-      instructions: "Use persisted weather evidence conservatively. Never infer property impact or damage.",
+      instructions: "Use persisted weather evidence conservatively. Commercial answers are limited to Texas, Florida, Louisiana, Georgia, and North Carolina over the latest 14 days. Unlocated questions default to those five states. Treat out_of_coverage as a coverage limitation, never as proof that no weather occurred. Never infer property impact or damage.",
     },
   }, 200, { "Mcp-Session-Id": crypto.randomUUID() })
   if (message.method === "ping") return response({ jsonrpc: "2.0", id: message.id, result: {} })

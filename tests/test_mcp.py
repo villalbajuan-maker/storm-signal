@@ -15,6 +15,10 @@ class FakeDatabase:
 
     def rpc(self, name, parameters):
         self.calls.append((name, parameters))
+        if name not in self.responses and name == "mcp_check_coverage":
+            return {"status": "in_coverage", "scope_defaulted": True, "covered_states": []}
+        if name not in self.responses and name == "mcp_check_event_coverage":
+            return {"status": "in_coverage", "requested_state_code": "TX", "covered_states": []}
         return self.responses.get(name, [])
 
 
@@ -85,16 +89,16 @@ class MCPTransportTests(unittest.TestCase):
     def test_successful_tool_has_readable_text_fallback(self):
         database = FakeDatabase({
             "mcp_get_storm_event": {
-                "event": {"id": "0e8f6a0d-f364-4cdd-8e32-f4c18fed8a64", "county": "Pondera"},
+                "event": {"id": "0e8f6a0d-f364-4cdd-8e32-f4c18fed8a64", "county": "Floyd"},
                 "source_versions": [],
             },
             "mcp_get_event_geographies": {
                 "vintage": 2025,
                 "geospatial_status": "complete",
                 "areas": [
-                    {"area_type": "state", "name": "Montana", "geoid": "30"},
-                    {"area_type": "county", "name": "Pondera County", "geoid": "30073"},
-                    {"area_type": "zcta", "name": "ZCTA5 59425", "zcta5": "59425"},
+                    {"area_type": "state", "name": "Texas", "geoid": "48"},
+                    {"area_type": "county", "name": "Floyd County", "geoid": "48153"},
+                    {"area_type": "zcta", "name": "ZCTA5 79235", "zcta5": "79235"},
                 ],
             },
         })
@@ -106,13 +110,13 @@ class MCPTransportTests(unittest.TestCase):
             }},
         }))
         text = body["result"]["content"][0]["text"]
-        self.assertIn("Pondera", text)
-        self.assertIn("59425", text)
+        self.assertIn("Floyd", text)
+        self.assertIn("79235", text)
         self.assertIn("0e8f6a0d-f364-4cdd-8e32-f4c18fed8a64", text)
         self.assertEqual(body["result"]["structuredContent"]["geography"]["geospatial_status"], "complete")
         self.assertEqual(
             body["result"]["structuredContent"]["geography"]["summary"]["zcta_approximate_zip_area"],
-            "59425",
+            "79235",
         )
         self.assertIn(("mcp_get_event_geographies", {
             "p_event_id": "0e8f6a0d-f364-4cdd-8e32-f4c18fed8a64"
@@ -145,7 +149,7 @@ class MCPToolTests(unittest.TestCase):
             "geography": {
                 "queue_status": "healthy", "vintage": 2025,
                 "method_version": "census-postgis-v1",
-                "covered_state_count": 12,
+                "covered_state_count": 5,
                 "event_processing": {"pending": 0},
             },
         }
@@ -157,7 +161,27 @@ class MCPToolTests(unittest.TestCase):
         self.assertEqual(result["count"], 0)
         self.assertEqual(result["data_health"], health)
         self.assertEqual(result["data_health"]["geography"]["queue_status"], "healthy")
-        self.assertEqual(result["data_health"]["geography"]["covered_state_count"], 12)
+        self.assertEqual(result["data_health"]["geography"]["covered_state_count"], 5)
+
+    def test_unsupported_state_returns_educational_coverage_result(self):
+        coverage = {
+            "status": "out_of_coverage", "requested_state": "Colorado",
+            "covered_states": [{"state_code": "TX", "name": "Texas"}],
+        }
+        database = FakeDatabase({"mcp_check_coverage": coverage, "mcp_data_health": {}})
+        result = StormSignalTools(database).call("search_storm_events", {"state": "Colorado"})
+        self.assertEqual(result["status"], "out_of_coverage")
+        self.assertIn("Texas, Florida, Louisiana, Georgia, and North Carolina", result["message"])
+        self.assertEqual(result["events"], [])
+        self.assertFalse(any(name == "mcp_search_storm_events" for name, _ in database.calls))
+
+    def test_requested_30_days_discloses_14_day_effective_window(self):
+        tools = StormSignalTools(FakeDatabase({"mcp_search_storm_events": []}))
+        result = tools.call("search_storm_events", {
+            "start_at": "2026-06-01T00:00:00Z", "end_at": "2099-01-01T00:00:00Z",
+        })
+        self.assertEqual(result["window"]["available_window_days"], 14)
+        self.assertTrue(result["window"]["truncated"])
 
     def test_search_passes_derived_geography_filters(self):
         database = FakeDatabase({"mcp_search_storm_events": []})

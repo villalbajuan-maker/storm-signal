@@ -40,3 +40,9 @@ The MCP transport returns the same outcome structurally with `status: out_of_cov
 ## Acceptance boundary
 
 No MCP query may expose an event outside the allowlist, including unlocated searches and direct `event_id` lookups. Source-health observations may describe national ingestion, but event counts, summaries, evidence, and commercial conclusions are scoped to the controlled demo territory.
+
+## Implementation status
+
+- Tranche 1 complete: canonical allowlist, state/coordinate guards, SQL filtering, direct-event protection, 14-day clamp, and scoped data health.
+- Tranche 2 complete: all four MCP tools call the coverage guard, emit structured `in_coverage`, `out_of_coverage`, or `location_mismatch` status, include the five-state list, and disclose requested versus effective time windows. Tool descriptions and server instructions carry the same contract.
+- Live acceptance verified through `https://mcp.vectoros.co/mcp`: Colorado and an external `event_id` returned educational `out_of_coverage` results without tool errors or event payload exposure; an unlocated 30-day summary returned only FL, NC, and TX data present in the five-state scope and disclosed truncation to 14 days.

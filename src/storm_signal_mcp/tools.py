@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from storm_signal_recon.supabase import SupabaseRest
@@ -11,6 +11,9 @@ EVENT_TYPES = [
     "hail_report", "severe_thunderstorm_warning", "tornado_warning",
     "wind_report", "tornado_report", "historical_hail_event",
 ]
+COVERAGE_MESSAGE = "This location is not yet part of Storm Signal's controlled demo coverage. We currently provide commercial analysis for Texas, Florida, Louisiana, Georgia, and North Carolina. Coverage for additional states is coming soon."
+IN_COVERAGE_MESSAGE = "This request is within Storm Signal's controlled demo coverage for Texas, Florida, Louisiana, Georgia, and North Carolina."
+WINDOW_DAYS = 14
 
 
 def _schema(properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
@@ -23,7 +26,7 @@ def _schema(properties: dict[str, Any], required: list[str] | None = None) -> di
 TOOL_DEFINITIONS = [
     {
         "name": "search_storm_events",
-        "description": "Search persisted Storm Signal events by time, type, state, derived county, Census place, ZCTA, hail size, status, or distance from a coordinate.",
+        "description": "Search recent events within the controlled demo coverage: Texas, Florida, Louisiana, Georgia, and North Carolina. Unlocated searches default to all five states; the available window is 14 days.",
         "inputSchema": _schema({
             "start_at": {"type": "string", "format": "date-time"},
             "end_at": {"type": "string", "format": "date-time"},
@@ -41,13 +44,13 @@ TOOL_DEFINITIONS = [
     },
     {
         "name": "get_storm_event",
-        "description": "Get one normalized event with retained source payload versions, Census geography when available, and evidence limitations.",
+        "description": "Get one normalized event only when it belongs to the five-state controlled demo coverage, with source versions, Census geography, and limitations.",
         "inputSchema": _schema({"event_id": {"type": "string", "format": "uuid"}}, ["event_id"]),
         "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     },
     {
         "name": "assess_location",
-        "description": "Produce a deterministic evidence score for a location and time window. It never claims that a property was hit or damaged.",
+        "description": "Produce a deterministic evidence score for a covered location in TX, FL, LA, GA, or NC over the available 14-day window.",
         "inputSchema": _schema({
             "latitude": {"type": "number", "minimum": -90, "maximum": 90},
             "longitude": {"type": "number", "minimum": -180, "maximum": 180},
@@ -59,7 +62,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "name": "summarize_storm_activity",
-        "description": "Aggregate persisted storm activity by event type, state, county, or UTC day for a bounded time window.",
+        "description": "Aggregate activity only for TX, FL, LA, GA, and NC over the available 14-day window. Unlocated requests default to all five states.",
         "inputSchema": _schema({
             "start_at": {"type": "string", "format": "date-time"},
             "end_at": {"type": "string", "format": "date-time"},
@@ -88,26 +91,41 @@ class StormSignalTools:
         trace_id = str(uuid.uuid4())
         self._validate(name, arguments)
         data_health = self.database.rpc("mcp_data_health", {})
+        window = self._effective_window(arguments)
+        if name == "get_storm_event":
+            coverage = self._present_coverage(self.database.rpc("mcp_check_event_coverage", {"p_event_id": arguments["event_id"]}))
+            if coverage.get("status") == "not_found":
+                raise ValueError("Storm event not found")
+            if coverage.get("status") != "in_coverage":
+                result = self._unavailable(coverage, None)
+            else:
+                data = self.database.rpc("mcp_get_storm_event", {"p_event_id": arguments["event_id"]})
+                if data is None:
+                    raise ValueError("Storm event not found")
+                geography = self._present_geography(
+                    self.database.rpc("mcp_get_event_geographies", {"p_event_id": arguments["event_id"]})
+                )
+                result = {"status": "in_coverage", "coverage": coverage, **data, "geography": geography, "limitations": self._limitations()}
+            return {"trace_id": trace_id, "generated_at": datetime.now(timezone.utc).isoformat(), "data_health": data_health, **result}
+
+        coverage = self._present_coverage(self.database.rpc("mcp_check_coverage", {
+            "p_state": arguments.get("state"), "p_lat": arguments.get("latitude"), "p_lon": arguments.get("longitude"),
+        }))
+        if coverage.get("status") != "in_coverage":
+            result = self._unavailable(coverage, window)
+            return {"trace_id": trace_id, "generated_at": datetime.now(timezone.utc).isoformat(), "data_health": data_health, **result}
         if name == "search_storm_events":
             data = self.database.rpc("mcp_search_storm_events", self._search_params(arguments))
-            result = {"events": data or [], "count": len(data or []), "limitations": self._limitations()}
-        elif name == "get_storm_event":
-            data = self.database.rpc("mcp_get_storm_event", {"p_event_id": arguments["event_id"]})
-            if data is None:
-                raise ValueError("Storm event not found")
-            geography = self._present_geography(
-                self.database.rpc("mcp_get_event_geographies", {"p_event_id": arguments["event_id"]})
-            )
-            result = {**data, "geography": geography, "limitations": self._limitations()}
+            result = {"status": "in_coverage", "coverage": coverage, "window": window, "events": data or [], "count": len(data or []), "limitations": self._limitations()}
         elif name == "summarize_storm_activity":
             data = self.database.rpc("mcp_summarize_storm_activity", {
                 "p_start_at": arguments["start_at"], "p_end_at": arguments["end_at"],
                 "p_group_by": arguments.get("group_by", "event_type"),
                 "p_state": arguments.get("state"), "p_event_types": arguments.get("event_types"),
             })
-            result = {"groups": data or [], "group_by": arguments.get("group_by", "event_type"), "limitations": self._limitations()}
+            result = {"status": "in_coverage", "coverage": coverage, "window": window, "groups": data or [], "group_by": arguments.get("group_by", "event_type"), "limitations": self._limitations()}
         elif name == "assess_location":
-            result = self._assess(arguments)
+            result = {"status": "in_coverage", "coverage": coverage, **self._assess(arguments)}
         else:
             raise ValueError(f"Unknown tool: {name}")
         return {
@@ -138,11 +156,36 @@ class StormSignalTools:
         classification = "strong" if score >= 60 else "moderate" if score >= 25 else "limited"
         return {
             "location": {"latitude": a["latitude"], "longitude": a["longitude"], "radius_miles": radius},
-            "window": {"start_at": a["start_at"], "end_at": a["end_at"]},
+            "window": self._effective_window(a),
             "score": score, "classification": classification, "score_reasons": reasons,
             "evidence": {"warnings": warnings, "hail_reports": reports, "historical_hail_events": historical},
             "limitations": self._limitations(),
         }
+
+    @staticmethod
+    def _present_coverage(value: dict[str, Any]) -> dict[str, Any]:
+        return {**value, "message": IN_COVERAGE_MESSAGE if value.get("status") == "in_coverage" else COVERAGE_MESSAGE}
+
+    @staticmethod
+    def _effective_window(a: dict[str, Any]) -> dict[str, Any]:
+        now = datetime.now(timezone.utc)
+        available_start = now - timedelta(days=WINDOW_DAYS)
+        requested_start = datetime.fromisoformat(str(a["start_at"]).replace("Z", "+00:00")) if a.get("start_at") else None
+        requested_end = datetime.fromisoformat(str(a["end_at"]).replace("Z", "+00:00")) if a.get("end_at") else None
+        effective_start = max(requested_start, available_start) if requested_start else available_start
+        effective_end = min(requested_end, now) if requested_end else now
+        return {
+            "requested_start_at": requested_start.isoformat() if requested_start else None,
+            "requested_end_at": requested_end.isoformat() if requested_end else None,
+            "effective_start_at": effective_start.isoformat(), "effective_end_at": effective_end.isoformat(),
+            "available_window_days": WINDOW_DAYS,
+            "truncated": bool((requested_start and requested_start < available_start) or (requested_end and requested_end > now)),
+            "defaulted": not requested_start or not requested_end,
+        }
+
+    @staticmethod
+    def _unavailable(coverage: dict[str, Any], window: dict[str, Any] | None) -> dict[str, Any]:
+        return {"status": coverage.get("status", "out_of_coverage"), "message": COVERAGE_MESSAGE, "coverage": coverage, "window": window, "events": [], "count": 0, "limitations": StormSignalTools._limitations()}
 
     @staticmethod
     def _search_params(a: dict[str, Any]) -> dict[str, Any]:
