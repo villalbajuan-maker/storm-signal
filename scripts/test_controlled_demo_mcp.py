@@ -62,10 +62,10 @@ def main() -> int:
     tools = rpc("tools/list", {}, 2)["result"]["tools"]
     require({item["name"] for item in tools} == {
         "search_storm_events", "get_storm_event", "assess_location", "summarize_storm_activity",
-        "search_tropical_cyclones", "rank_markets",
+        "search_tropical_cyclones", "rank_markets", "build_field_plan", "prepare_field_brief",
     }, "tool list changed")
-    require(all("controlled demo" in item["description"] or "TX" in item["description"] or item["name"] == "rank_markets" for item in tools), "tool descriptions omit coverage")
-    results.append({"test": "six_tool_contract", "passed": True})
+    require(all("controlled demo" in item["description"] or "TX" in item["description"] or item["name"] in {"rank_markets", "build_field_plan", "prepare_field_brief"} for item in tools), "tool descriptions omit coverage")
+    results.append({"test": "eight_tool_contract", "passed": True})
 
     default_search, error = call("search_storm_events", {}, 3)
     require(not error and default_search.get("status") == "in_coverage", "default search failed")

@@ -51,7 +51,7 @@ def main() -> int:
     tools = rpc("tools/list", {}, 2)["result"]["tools"]
     require({tool["name"] for tool in tools} == {
         "search_storm_events", "get_storm_event", "assess_location", "summarize_storm_activity",
-        "search_tropical_cyclones", "rank_markets",
+        "search_tropical_cyclones", "rank_markets", "build_field_plan", "prepare_field_brief",
     }, "public tool catalog changed")
     checks.append("tools_list")
 
@@ -102,6 +102,30 @@ def main() -> int:
     }, "market ranking emitted an unsupported decision")
     require([item.get("rank") for item in ranking["markets"]] == [1, 2], "market ranking order is not deterministic")
     checks.append("market_ranking")
+
+    work_start = now + timedelta(hours=1)
+    plan, error = call("build_field_plan", {
+        "objective": "Verify the strongest supported market safely.",
+        "markets": [
+            {"name": "Austin", "latitude": 30.2672, "longitude": -97.7431},
+            {"name": "Brewster County signal", "latitude": 29.335, "longitude": -103.271785714},
+        ],
+        "teams": [{"name": "Crew A"}],
+        "operating_base": {"name": "Austin", "latitude": 30.2672, "longitude": -97.7431},
+        "evidence_start_at": (now - timedelta(days=2)).isoformat(), "evidence_end_at": now.isoformat(),
+        "work_start_at": work_start.isoformat(), "work_end_at": (work_start + timedelta(hours=5)).isoformat(),
+        "minutes_per_market": 90, "radius_miles": 10,
+    }, 12)
+    require(not error and plan.get("methodology", {}).get("id") == "storm-signal-field-plan-v1", "field plan failed")
+    require(plan.get("status") in {"ready", "partial", "insufficient_evidence"}, "field plan status changed")
+    checks.append("field_plan")
+
+    brief, error = call("prepare_field_brief", {"title": "Public acceptance field brief", "field_plan": plan, "timezone": "UTC"}, 13)
+    require(not error and brief.get("status") == "preview_ready", "field brief failed")
+    require(len(brief.get("artifact", {}).get("content_hash", "")) == 64, "field brief hash missing")
+    require(brief.get("exports", {}).get("pdf", {}).get("status") == "not_available", "PDF boundary changed")
+    require(brief.get("persistence", {}).get("status") == "not_persisted", "persistence boundary changed")
+    checks.append("field_brief_preview")
 
     summary, error = call("summarize_storm_activity", {
         "start_at": (now - timedelta(days=30)).isoformat(),

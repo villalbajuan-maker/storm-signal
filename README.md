@@ -2,7 +2,7 @@
 
 This proof of concept ingests, normalizes, persists, and serves evidence from three authoritative severe-weather sources. It preserves raw provenance and hashes while maintaining a queryable PostGIS interpretation of each event.
 
-It also includes a remote MCP server that exposes persisted evidence and decisions through six read-only tools: `search_storm_events`, `get_storm_event`, `assess_location`, `summarize_storm_activity`, `search_tropical_cyclones`, and `rank_markets`.
+It also includes a remote MCP server that exposes persisted evidence and deterministic decision support through eight read-only tools: `search_storm_events`, `get_storm_event`, `assess_location`, `summarize_storm_activity`, `search_tropical_cyclones`, `rank_markets`, `build_field_plan`, and `prepare_field_brief`.
 
 Product promise, frozen commercial outcomes, delivery order, and Gulf Coast expansion are governed by [the product and commercial roadmap](docs/product-commercial-roadmap.md).
 
@@ -90,6 +90,10 @@ The MCP initialization metadata advertises the Storm Signal logo through `server
 The server is stateless even though it issues session identifiers, so Cloud Run can safely use more than one instance. Each tool response includes a trace identifier, structured evidence, and explicit limitations. The versioned location score is deterministic across hail, wind, tornado, warnings, recency, proximity and source health; it keeps NHC forecasts outside the score and never claims that a property was hit or damaged.
 
 `rank_markets` compares two to five explicitly located candidates using 70 points of multihazard evidence support, 20 points of straight-line operating-base proximity, 10 points of geographic readiness, and disclosed missing-input penalties. Its outputs are investigation priorities—`prioritize`, `monitor`, or `insufficient_evidence`—not leads or confirmed opportunities.
+
+`build_field_plan` turns eligible ranked markets into an explicit crew-capacity preview: ranked sequence, round-robin assignments, working-window fit, verification questions, and continue/change/stop conditions. It does not claim route optimization, travel time, permission, or available work.
+
+`prepare_field_brief` produces an auditable structured preview plus Markdown and priority-area CSV. The public MCP deliberately reports PDF, tenant persistence, and revocable sharing as unavailable until an authenticated artifact layer exists.
 
 `search_storm_events` accepts the persisted source fields plus derived Census/PostGIS filters: `county` matches either the source county or the derived county (with or without the `County`/`Parish` suffix), `place` matches the official Census place name, and `zcta` matches a five-digit Census ZCTA. Search results include their derived states, counties, places, ZCTAs, Census vintage, and method version. ZCTAs are approximate ZIP areas, not USPS delivery boundaries.
 

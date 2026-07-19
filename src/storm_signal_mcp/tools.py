@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import os
 import uuid
+import csv
+import hashlib
+import io
+import json
 from math import atan2, cos, pi, sin, sqrt
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -125,6 +129,48 @@ TOOL_DEFINITIONS = [
         }, ["markets", "start_at", "end_at"]),
         "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     },
+    {
+        "name": "build_field_plan",
+        "description": "Build a deterministic field-investigation plan for 2 to 5 covered markets, using the frozen market ranking, crew capacity, and an explicit working window. This preview is not route optimization or a persisted workspace artifact.",
+        "inputSchema": _schema({
+            "objective": {"type": "string", "minLength": 1, "maxLength": 500},
+            "markets": {"type": "array", "minItems": 2, "maxItems": 5, "items": {
+                "type": "object", "additionalProperties": False,
+                "required": ["name", "latitude", "longitude"],
+                "properties": {
+                    "name": {"type": "string", "minLength": 1, "maxLength": 120},
+                    "latitude": {"type": "number", "minimum": -90, "maximum": 90},
+                    "longitude": {"type": "number", "minimum": -180, "maximum": 180},
+                },
+            }},
+            "teams": {"type": "array", "minItems": 1, "maxItems": 10, "items": {
+                "type": "object", "additionalProperties": False, "required": ["name"],
+                "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 120}, "members": {"type": "array", "items": {"type": "string"}}},
+            }},
+            "evidence_start_at": {"type": "string", "format": "date-time"},
+            "evidence_end_at": {"type": "string", "format": "date-time"},
+            "work_start_at": {"type": "string", "format": "date-time"},
+            "work_end_at": {"type": "string", "format": "date-time"},
+            "minutes_per_market": {"type": "integer", "minimum": 30, "maximum": 240, "default": 90},
+            "radius_miles": {"type": "number", "exclusiveMinimum": 0, "maximum": 100, "default": 10},
+            "operating_base": {"type": "object", "additionalProperties": False, "required": ["latitude", "longitude"], "properties": {
+                "name": {"type": "string", "maxLength": 120},
+                "latitude": {"type": "number", "minimum": -90, "maximum": 90},
+                "longitude": {"type": "number", "minimum": -180, "maximum": 180},
+            }},
+        }, ["objective", "markets", "teams", "evidence_start_at", "evidence_end_at", "work_start_at", "work_end_at"]),
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    },
+    {
+        "name": "prepare_field_brief",
+        "description": "Prepare an auditable field brief preview from a Storm Signal field plan, with structured content, Markdown, and priority-area CSV. Public MCP previews are not persisted; PDF and revocable sharing require the authenticated artifact layer.",
+        "inputSchema": _schema({
+            "title": {"type": "string", "minLength": 1, "maxLength": 200},
+            "field_plan": {"type": "object"},
+            "timezone": {"type": "string", "default": "UTC"},
+        }, ["title", "field_plan"]),
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    },
 ]
 
 
@@ -189,6 +235,10 @@ class StormSignalTools:
             }
         elif name == "rank_markets":
             result = self._rank_markets(arguments, data_health, coverage)
+        elif name == "build_field_plan":
+            result = self._build_field_plan(arguments, data_health, coverage)
+        elif name == "prepare_field_brief":
+            result = self._prepare_field_brief(arguments, data_health, coverage)
         else:
             raise ValueError(f"Unknown tool: {name}")
         return {
@@ -196,6 +246,104 @@ class StormSignalTools:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "data_health": data_health,
             **result,
+        }
+
+    def _build_field_plan(self, a: dict[str, Any], data_health: dict[str, Any], coverage: dict[str, Any]) -> dict[str, Any]:
+        ranking = self.call("rank_markets", {
+            "markets": a["markets"], "operating_base": a.get("operating_base"),
+            "start_at": a["evidence_start_at"], "end_at": a["evidence_end_at"],
+            "radius_miles": a.get("radius_miles", 10),
+        })
+        selected = [market for market in ranking.get("markets", []) if market.get("eligible") and market.get("decision") != "insufficient_evidence"]
+        teams, minutes = a["teams"], int(a.get("minutes_per_market", 90))
+        work_start = datetime.fromisoformat(str(a["work_start_at"]).replace("Z", "+00:00"))
+        work_end = datetime.fromisoformat(str(a["work_end_at"]).replace("Z", "+00:00"))
+        team_slots = {team["name"]: 0 for team in teams}
+        assignments = []
+        for index, market in enumerate(selected):
+            team = teams[index % len(teams)]
+            slot = team_slots[team["name"]]
+            team_slots[team["name"]] += 1
+            starts_at = work_start + timedelta(minutes=slot * minutes)
+            ends_at = starts_at + timedelta(minutes=minutes)
+            scheduled = ends_at <= work_end
+            assignments.append({
+                "sequence": index + 1, "market": market["name"], "rank": market["rank"],
+                "decision": market["decision"], "priority_score": market["final_score"],
+                "support_level": market.get("support_level"), "team": team["name"],
+                "team_members": team.get("members"), "scheduled": scheduled,
+                "starts_at": starts_at.isoformat() if scheduled else None,
+                "ends_at": ends_at.isoformat() if scheduled else None,
+                "location": market["location"], "rationale": market["rationale"],
+                "hazards": market.get("hazards"),
+                "verification_questions": [
+                    "What weather evidence can the crew verify safely from public access?",
+                    "Do field conditions support or contradict the reported location, timing, and hazard type?",
+                    "Are access, permission, safety, and local restrictions clear before any property-level activity?",
+                ],
+            })
+        unscheduled = sum(not item["scheduled"] for item in assignments)
+        evidence_times = [market.get("evidence_components", {}).get("recency", {}).get("latest_evidence_at") for market in selected]
+        latest_evidence = max((value for value in evidence_times if value), default=None)
+        return {
+            "status": "insufficient_evidence" if not selected else "partial" if unscheduled else "ready",
+            "coverage": coverage,
+            "methodology": {"id": "storm-signal-field-plan-v1", "version": 1, "ranking_methodology": "storm-signal-market-ranking-v1", "sequence_policy": "Eligible markets are ordered by market rank and assigned round-robin to teams; this is not route optimization."},
+            "objective": a["objective"],
+            "evidence_window": {"start_at": a["evidence_start_at"], "end_at": a["evidence_end_at"], "latest_evidence_at": latest_evidence},
+            "working_window": {"start_at": a["work_start_at"], "end_at": a["work_end_at"], "minutes_per_market": minutes},
+            "operating_base": a.get("operating_base"), "ranking_snapshot": ranking.get("markets", []), "assignments": assignments,
+            "capacity": {"selected_markets": len(selected), "scheduled_markets": len(assignments) - unscheduled, "unscheduled_markets": unscheduled, "teams": len(teams)},
+            "field_signals": {
+                "continue": ["Evidence remains consistent with the selected market and field conditions are safe and authorized."],
+                "change": ["New official evidence materially changes the market order or field observations contradict the current rationale."],
+                "stop": ["Conditions are unsafe, required access or permission is absent, or the evidence does not support continued investigation."],
+            },
+            "crew_checklist": [
+                "Review the evidence time, source class, and market rationale before departure.",
+                "Confirm weather, road, access, daylight, and crew-safety conditions.",
+                "Record observations without treating them as confirmation of property damage.",
+                "Escalate contradictory or corrected evidence before changing the plan.",
+            ],
+            "missing_data": (["Operating base was not supplied; sequence is priority-based only."] if not a.get("operating_base") else []) + ([f"{unscheduled} selected market(s) exceed the supplied working window."] if unscheduled else []),
+            "limitations": [*self._limitations(), "The sequence is priority-based and round-robin; it is not road routing, travel-time estimation, or workforce tracking.", "The plan organizes field verification and does not authorize access or confirm available work."],
+        }
+
+    def _prepare_field_brief(self, a: dict[str, Any], data_health: dict[str, Any], coverage: dict[str, Any]) -> dict[str, Any]:
+        plan, title, tz = a["field_plan"], str(a["title"]), str(a.get("timezone", "UTC"))
+        assignments = plan["assignments"]
+        primary = next((item for item in assignments if item.get("scheduled")), assignments[0] if assignments else None)
+        stream = io.StringIO(newline="")
+        writer = csv.writer(stream)
+        writer.writerow(["sequence", "market", "rank", "decision", "priority_score", "support_level", "team", "starts_at", "ends_at", "latitude", "longitude"])
+        for item in assignments:
+            writer.writerow([item.get("sequence"), item.get("market"), item.get("rank"), item.get("decision"), item.get("priority_score"), item.get("support_level"), item.get("team"), item.get("starts_at"), item.get("ends_at"), item.get("location", {}).get("latitude"), item.get("location", {}).get("longitude")])
+        generated_at = datetime.now(timezone.utc).isoformat()
+        markdown = "\n".join([
+            f"# {title}", "", f"Generated: {generated_at} ({tz})", "", f"Objective: {plan['objective']}", "",
+            f"Primary decision: {primary['market']} — {primary['decision']}" if primary else "Primary decision: Insufficient evidence for a field assignment", "", "## Field priorities", "",
+            *[f"{item['sequence']}. {item['market']} — {item['decision']}; team {item['team']}; " + (f"{item['starts_at']} to {item['ends_at']}." if item.get('scheduled') else "not scheduled within the working window.") for item in assignments],
+            "", "## Verify in the field", "", *[f"- {item}" for item in plan.get("crew_checklist", [])],
+            "", "## Decision-change factors", "", *[f"- {key}: {value}" for key, values in plan.get("field_signals", {}).items() for value in values],
+            "", "## Limitations", "", *[f"- {item}" for item in plan.get("limitations", [])],
+        ])
+        preview = {
+            "artifact_type": "field_brief", "title": title, "generated_at": generated_at, "timezone": tz,
+            "source_plan_trace_id": plan.get("trace_id"),
+            "methodology": {"id": "storm-signal-field-brief-v1", "version": 1, "field_plan_methodology": plan["methodology"]["id"]},
+            "principal_decision": ({"market": primary["market"], "decision": primary["decision"], "priority_score": primary.get("priority_score"), "support_level": primary.get("support_level")} if primary else None),
+            "objective": plan["objective"], "operating_base": plan.get("operating_base"), "evidence_window": plan.get("evidence_window"), "working_window": plan.get("working_window"),
+            "assignments": assignments, "field_signals": plan.get("field_signals"), "crew_checklist": plan.get("crew_checklist"),
+            "sources": {"data_health_checked_at": plan.get("data_health", {}).get("checked_at"), "methodologies": [plan["methodology"]["id"], "storm-signal-market-ranking-v1", "storm-signal-location-multihazard-v1"]},
+            "limitations": plan.get("limitations", self._limitations()),
+        }
+        preview["content_hash"] = hashlib.sha256(json.dumps(preview, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return {
+            "status": "preview_ready", "coverage": coverage, "artifact": preview,
+            "exports": {"markdown": {"media_type": "text/markdown", "content": markdown}, "priority_areas_csv": {"media_type": "text/csv", "content": stream.getvalue()}, "pdf": {"status": "not_available", "reason": "PDF rendering requires the authenticated persistent artifact service."}},
+            "persistence": {"status": "not_persisted", "reason": "Public MCP has no authenticated workspace or tenant context."},
+            "sharing": {"status": "not_available", "reason": "Revocable sharing requires persisted tenant-scoped artifacts."},
+            "limitations": ["This is a deterministic preview, not a saved workspace artifact.", "The brief supports field investigation and does not confirm property damage, available work, leads, or revenue."],
         }
 
     def _rank_markets(self, a: dict[str, Any], data_health: dict[str, Any], coverage: dict[str, Any]) -> dict[str, Any]:
@@ -463,6 +611,32 @@ class StormSignalTools:
             base = a.get("operating_base")
             if base and not (-90 <= float(base.get("latitude", 999)) <= 90 and -180 <= float(base.get("longitude", 999)) <= 180):
                 raise ValueError("operating_base requires valid latitude and longitude")
+        if name == "build_field_plan":
+            if not str(a.get("objective", "")).strip():
+                raise ValueError("objective is required")
+            for key in ("evidence_start_at", "evidence_end_at", "work_start_at", "work_end_at"):
+                if key not in a: raise ValueError(f"{key} is required")
+                datetime.fromisoformat(str(a[key]).replace("Z", "+00:00"))
+            if a["evidence_start_at"] > a["evidence_end_at"]: raise ValueError("evidence_start_at must be before evidence_end_at")
+            if a["work_start_at"] >= a["work_end_at"]: raise ValueError("work_start_at must be before work_end_at")
+            markets, teams = a.get("markets"), a.get("teams")
+            if not isinstance(markets, list) or not 2 <= len(markets) <= 5: raise ValueError("markets must contain between 2 and 5 candidates")
+            if not isinstance(teams, list) or not 1 <= len(teams) <= 10: raise ValueError("teams must contain between 1 and 10 teams")
+            if len({str(team.get("name", "")).strip() for team in teams}) != len(teams) or any(not str(team.get("name", "")).strip() for team in teams):
+                raise ValueError("every team requires a unique name")
+            for market in markets:
+                if not str(market.get("name", "")).strip() or not (-90 <= float(market.get("latitude", 999)) <= 90 and -180 <= float(market.get("longitude", 999)) <= 180):
+                    raise ValueError("every market requires a name and valid coordinates")
+            minutes = int(a.get("minutes_per_market", 90))
+            if not 30 <= minutes <= 240: raise ValueError("minutes_per_market must be between 30 and 240")
+            base = a.get("operating_base")
+            if base and not (-90 <= float(base.get("latitude", 999)) <= 90 and -180 <= float(base.get("longitude", 999)) <= 180):
+                raise ValueError("operating_base requires valid latitude and longitude")
+        if name == "prepare_field_brief":
+            plan = a.get("field_plan")
+            if not str(a.get("title", "")).strip(): raise ValueError("title is required")
+            if not isinstance(plan, dict) or plan.get("methodology", {}).get("id") != "storm-signal-field-plan-v1" or not isinstance(plan.get("assignments"), list):
+                raise ValueError("field_plan must be a valid Storm Signal field plan")
         coords = (a.get("latitude"), a.get("longitude"))
         if (coords[0] is None) != (coords[1] is None):
             raise ValueError("latitude and longitude must be provided together")

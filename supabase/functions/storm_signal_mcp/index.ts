@@ -122,6 +122,54 @@ const TOOLS = [
     }, ["markets", "start_at", "end_at"]),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
+  {
+    name: "build_field_plan",
+    description: "Turn 2 to 5 candidate markets into a deterministic field-investigation plan with ranking, team assignments, sequence, working times, rationale, verification questions, and continue/change/stop signals. This is not route optimization or autonomous deployment.",
+    inputSchema: schema({
+      objective: { type: "string", minLength: 1, maxLength: 500 },
+      markets: {
+        type: "array", minItems: 2, maxItems: 5,
+        items: {
+          type: "object", additionalProperties: false, required: ["name", "latitude", "longitude"],
+          properties: {
+            name: { type: "string", minLength: 1, maxLength: 120 },
+            latitude: { type: "number", minimum: -90, maximum: 90 },
+            longitude: { type: "number", minimum: -180, maximum: 180 },
+          },
+        },
+      },
+      teams: {
+        type: "array", minItems: 1, maxItems: 10,
+        items: {
+          type: "object", additionalProperties: false, required: ["name"],
+          properties: { name: { type: "string", minLength: 1, maxLength: 120 }, members: { type: "array", items: { type: "string" } } },
+        },
+      },
+      evidence_start_at: { type: "string", format: "date-time" }, evidence_end_at: { type: "string", format: "date-time" },
+      work_start_at: { type: "string", format: "date-time" }, work_end_at: { type: "string", format: "date-time" },
+      minutes_per_market: { type: "integer", minimum: 30, maximum: 240, default: 90 },
+      radius_miles: { type: "number", exclusiveMinimum: 0, maximum: 100, default: 10 },
+      operating_base: {
+        type: "object", additionalProperties: false, required: ["latitude", "longitude"],
+        properties: {
+          name: { type: "string", maxLength: 120 },
+          latitude: { type: "number", minimum: -90, maximum: 90 },
+          longitude: { type: "number", minimum: -180, maximum: 180 },
+        },
+      },
+    }, ["objective", "markets", "teams", "evidence_start_at", "evidence_end_at", "work_start_at", "work_end_at"]),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "prepare_field_brief",
+    description: "Prepare a non-persisted Field Brief preview from a Storm Signal field plan, including structured content, Markdown, and Priority Areas CSV. PDF, sharing, and workspace persistence require the authenticated artifact layer and are not claimed by this tool.",
+    inputSchema: schema({
+      title: { type: "string", minLength: 1, maxLength: 160 },
+      field_plan: { type: "object" },
+      timezone: { type: "string", minLength: 1, maxLength: 80, default: "UTC" },
+    }, ["title", "field_plan"]),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
 ]
 
 const cors = {
@@ -177,6 +225,24 @@ function validate(name: string, a: Args) {
     }
     const base = a.operating_base as any
     if (base && (!(Number(base.latitude) >= -90 && Number(base.latitude) <= 90) || !(Number(base.longitude) >= -180 && Number(base.longitude) <= 180))) throw new Error("operating_base requires valid latitude and longitude")
+  }
+  if (name === "build_field_plan") {
+    for (const key of ["evidence_start_at", "evidence_end_at", "work_start_at", "work_end_at"]) {
+      if (!a[key] || Number.isNaN(Date.parse(String(a[key])))) throw new Error(`${key} is required and must be a valid date-time`)
+    }
+    if (Date.parse(String(a.evidence_start_at)) > Date.parse(String(a.evidence_end_at))) throw new Error("evidence_start_at must be before evidence_end_at")
+    if (Date.parse(String(a.work_start_at)) >= Date.parse(String(a.work_end_at))) throw new Error("work_start_at must be before work_end_at")
+    if (!Array.isArray(a.markets) || a.markets.length < 2 || a.markets.length > 5) throw new Error("markets must contain between 2 and 5 candidates")
+    if (!Array.isArray(a.teams) || a.teams.length < 1 || a.teams.length > 10) throw new Error("teams must contain between 1 and 10 teams")
+    for (const market of a.markets as any[]) {
+      if (!market?.name || !(Number(market.latitude) >= -90 && Number(market.latitude) <= 90) || !(Number(market.longitude) >= -180 && Number(market.longitude) <= 180)) throw new Error("every market requires a name and valid coordinates")
+    }
+    for (const team of a.teams as any[]) if (!team?.name) throw new Error("every team requires a name")
+    if (new Set((a.teams as any[]).map((team) => String(team.name).trim())).size !== a.teams.length) throw new Error("every team requires a unique name")
+  }
+  if (name === "prepare_field_brief") {
+    const plan = a.field_plan as any
+    if (!a.title || !plan || plan?.methodology?.id !== "storm-signal-field-plan-v1" || !Array.isArray(plan.assignments)) throw new Error("field_plan must be a valid Storm Signal field plan")
   }
   if (name === "search_tropical_cyclones") {
     for (const key of ["issued_after", "issued_before", "valid_at"]) {
@@ -264,6 +330,16 @@ function distanceMiles(aLat: number, aLon: number, bLat: number, bLon: number) {
 function operatingProximity(distance: number | null) {
   if (distance === null) return 0
   return distance <= 50 ? 20 : distance <= 100 ? 16 : distance <= 200 ? 12 : distance <= 300 ? 8 : distance <= 500 ? 4 : 0
+}
+
+async function sha256Text(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
+}
+
+function csvCell(value: unknown) {
+  const text = value === null || value === undefined ? "" : String(value)
+  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
 async function callTool(name: string, a: Args): Promise<any> {
@@ -358,6 +434,130 @@ async function callTool(name: string, a: Args): Promise<any> {
         ...LIMITATIONS,
         "Rankings are relative investigation priorities, not leads, confirmed opportunities, route plans, or proof of damage.",
         "NHC forecast evidence is not included in market-ranking points.",
+      ],
+    }
+  }
+  if (name === "build_field_plan") {
+    const ranking: any = await callTool("rank_markets", {
+      markets: a.markets, operating_base: a.operating_base,
+      start_at: a.evidence_start_at, end_at: a.evidence_end_at,
+      radius_miles: a.radius_miles ?? 10,
+    })
+    const selected = (ranking.markets ?? []).filter((market: any) => market.eligible && market.decision !== "insufficient_evidence")
+    const teams = a.teams as any[], minutes = Number(a.minutes_per_market ?? 90)
+    const workStart = Date.parse(String(a.work_start_at)), workEnd = Date.parse(String(a.work_end_at))
+    const teamSlots = new Map(teams.map((team) => [team.name, 0]))
+    const assignments = selected.map((market: any, index: number) => {
+      const team = teams[index % teams.length], slot = teamSlots.get(team.name) ?? 0
+      teamSlots.set(team.name, slot + 1)
+      const startsAt = workStart + slot * minutes * 60000, endsAt = startsAt + minutes * 60000
+      const scheduled = endsAt <= workEnd
+      return {
+        sequence: index + 1, market: market.name, rank: market.rank,
+        decision: market.decision, priority_score: market.final_score,
+        support_level: market.support_level, team: team.name,
+        team_members: team.members ?? null, scheduled,
+        starts_at: scheduled ? new Date(startsAt).toISOString() : null,
+        ends_at: scheduled ? new Date(endsAt).toISOString() : null,
+        location: market.location,
+        rationale: market.rationale,
+        hazards: market.hazards,
+        verification_questions: [
+          "What weather evidence can the crew verify safely from public access?",
+          "Do field conditions support or contradict the reported location, timing, and hazard type?",
+          "Are access, permission, safety, and local restrictions clear before any property-level activity?",
+        ],
+      }
+    })
+    const unscheduled = assignments.filter((item: any) => !item.scheduled).length
+    const latestEvidence = selected.map((market: any) => market.evidence_components?.recency?.latest_evidence_at).filter(Boolean).sort().at(-1) ?? null
+    return {
+      trace_id, generated_at, status: !selected.length ? "insufficient_evidence" : unscheduled ? "partial" : "ready",
+      coverage, data_health,
+      methodology: {
+        id: "storm-signal-field-plan-v1", version: 1,
+        ranking_methodology: "storm-signal-market-ranking-v1",
+        sequence_policy: "Eligible markets are ordered by market rank and assigned round-robin to teams; this is not route optimization.",
+      },
+      objective: a.objective,
+      evidence_window: { start_at: a.evidence_start_at, end_at: a.evidence_end_at, latest_evidence_at: latestEvidence },
+      working_window: { start_at: a.work_start_at, end_at: a.work_end_at, minutes_per_market: minutes },
+      operating_base: a.operating_base ?? null,
+      ranking_snapshot: ranking.markets ?? [], assignments,
+      capacity: { selected_markets: selected.length, scheduled_markets: assignments.length - unscheduled, unscheduled_markets: unscheduled, teams: teams.length },
+      field_signals: {
+        continue: ["Evidence remains consistent with the selected market and field conditions are safe and authorized."],
+        change: ["New official evidence materially changes the market order or field observations contradict the current rationale."],
+        stop: ["Conditions are unsafe, required access or permission is absent, or the evidence does not support continued investigation."],
+      },
+      crew_checklist: [
+        "Review the evidence time, source class, and market rationale before departure.",
+        "Confirm weather, road, access, daylight, and crew-safety conditions.",
+        "Record observations without treating them as confirmation of property damage.",
+        "Escalate contradictory or corrected evidence before changing the plan.",
+      ],
+      missing_data: [
+        ...(!a.operating_base ? ["Operating base was not supplied; sequence is priority-based only."] : []),
+        ...(unscheduled ? [`${unscheduled} selected market(s) exceed the supplied working window.`] : []),
+      ],
+      limitations: [
+        ...LIMITATIONS,
+        "The sequence is priority-based and round-robin; it is not road routing, travel-time estimation, or workforce tracking.",
+        "The plan organizes field verification and does not authorize access or confirm available work.",
+      ],
+    }
+  }
+  if (name === "prepare_field_brief") {
+    const plan = a.field_plan as any, title = String(a.title), timezone = String(a.timezone ?? "UTC")
+    const assignments = plan.assignments as any[]
+    const primary = assignments.find((item) => item.scheduled) ?? assignments[0] ?? null
+    const rows = assignments.map((item) => [
+      item.sequence, item.market, item.rank, item.decision, item.priority_score,
+      item.support_level, item.team, item.starts_at, item.ends_at,
+      item.location?.latitude, item.location?.longitude,
+    ])
+    const csv = [
+      ["sequence", "market", "rank", "decision", "priority_score", "support_level", "team", "starts_at", "ends_at", "latitude", "longitude"],
+      ...rows,
+    ].map((row) => row.map(csvCell).join(",")).join("\n")
+    const markdown = [
+      `# ${title}`, "", `Generated: ${generated_at} (${timezone})`, "",
+      `Objective: ${plan.objective}`, "",
+      `Primary decision: ${primary ? `${primary.market} — ${primary.decision}` : "Insufficient evidence for a field assignment"}`, "",
+      "## Field priorities", "",
+      ...assignments.map((item) => `${item.sequence}. ${item.market} — ${item.decision}; team ${item.team}; ${item.scheduled ? `${item.starts_at} to ${item.ends_at}` : "not scheduled within the working window"}.`),
+      "", "## Verify in the field", "",
+      ...(plan.crew_checklist ?? []).map((item: string) => `- ${item}`),
+      "", "## Decision-change factors", "",
+      ...Object.entries(plan.field_signals ?? {}).flatMap(([key, values]: [string, any]) => (values ?? []).map((value: string) => `- ${key}: ${value}`)),
+      "", "## Limitations", "",
+      ...(plan.limitations ?? []).map((item: string) => `- ${item}`),
+    ].join("\n")
+    const preview = {
+      artifact_type: "field_brief", title, generated_at, timezone,
+      source_plan_trace_id: plan.trace_id ?? null,
+      methodology: { id: "storm-signal-field-brief-v1", version: 1, field_plan_methodology: plan.methodology?.id },
+      principal_decision: primary ? { market: primary.market, decision: primary.decision, priority_score: primary.priority_score, support_level: primary.support_level } : null,
+      objective: plan.objective, operating_base: plan.operating_base ?? null,
+      evidence_window: plan.evidence_window, working_window: plan.working_window,
+      assignments, field_signals: plan.field_signals, crew_checklist: plan.crew_checklist,
+      sources: { data_health_checked_at: plan.data_health?.checked_at ?? null, methodologies: [plan.methodology?.id, "storm-signal-market-ranking-v1", "storm-signal-location-multihazard-v1"] },
+      limitations: plan.limitations ?? LIMITATIONS,
+    }
+    const contentHash = await sha256Text(JSON.stringify(preview))
+    return {
+      trace_id, generated_at, status: "preview_ready", coverage, data_health,
+      artifact: { ...preview, content_hash: contentHash },
+      exports: {
+        markdown: { media_type: "text/markdown", content: markdown },
+        priority_areas_csv: { media_type: "text/csv", content: csv },
+        pdf: { status: "not_available", reason: "PDF rendering requires the authenticated persistent artifact service." },
+      },
+      persistence: { status: "not_persisted", reason: "Public MCP has no authenticated workspace or tenant context." },
+      sharing: { status: "not_available", reason: "Revocable sharing requires persisted tenant-scoped artifacts." },
+      limitations: [
+        "This is a deterministic preview, not a saved workspace artifact.",
+        "The brief supports field investigation and does not confirm property damage, available work, leads, or revenue.",
       ],
     }
   }

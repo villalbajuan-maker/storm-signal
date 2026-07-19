@@ -59,13 +59,14 @@ class MCPTransportTests(unittest.TestCase):
         self.assertIn("mcp-session-id", headers)
         self.assertEqual(headers["access-control-expose-headers"], "mcp-session-id")
 
-    def test_tools_list_is_exactly_the_frozen_six(self):
+    def test_tools_list_is_exactly_the_frozen_eight(self):
         _, _, body = asyncio.run(request(self.app, "POST", "/mcp", {
             "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}
         }))
         self.assertEqual([t["name"] for t in body["result"]["tools"]], [
             "search_storm_events", "get_storm_event", "assess_location",
             "summarize_storm_activity", "search_tropical_cyclones", "rank_markets",
+            "build_field_plan", "prepare_field_brief",
         ])
 
     def test_notification_is_accepted_without_response_body(self):
@@ -323,6 +324,54 @@ class MCPToolTests(unittest.TestCase):
         self.assertFalse(denver["eligible"])
         self.assertIsNone(denver["final_score"])
         self.assertEqual(denver["decision"], "insufficient_evidence")
+
+    def test_field_plan_assigns_ranked_markets_and_discloses_capacity(self):
+        recent = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        events = [
+            {"id": "h", "event_type": "hail_report", "distance_miles": 2, "magnitude": 1.75, "started_at": recent},
+            {"id": "w", "event_type": "wind_report", "distance_miles": 4, "magnitude": 80, "started_at": recent},
+            {"id": "t", "event_type": "tornado_report", "distance_miles": 5, "started_at": recent},
+        ]
+        health = {"sources": [{"source": "spc_reports", "freshness_status": "fresh"}], "geography": {"queue_status": "healthy", "event_processing": {"pending": 0}}}
+        tools = StormSignalTools(FakeDatabase({"mcp_search_storm_events": events, "mcp_data_health": health}))
+        start = datetime.now(timezone.utc) + timedelta(hours=1)
+        plan = tools.call("build_field_plan", {
+            "objective": "Verify the strongest supported markets safely.",
+            "markets": [
+                {"name": "Near market", "latitude": 30.2672, "longitude": -97.7431},
+                {"name": "Far market", "latitude": 32.7767, "longitude": -96.7970},
+            ],
+            "teams": [{"name": "Crew A"}],
+            "operating_base": {"name": "Austin", "latitude": 30.2672, "longitude": -97.7431},
+            "evidence_start_at": recent, "evidence_end_at": datetime.now(timezone.utc).isoformat(),
+            "work_start_at": start.isoformat(), "work_end_at": (start + timedelta(minutes=90)).isoformat(),
+            "minutes_per_market": 90,
+        })
+        self.assertEqual(plan["methodology"]["id"], "storm-signal-field-plan-v1")
+        self.assertEqual([item["market"] for item in plan["assignments"]], ["Near market", "Far market"])
+        self.assertEqual(plan["capacity"]["scheduled_markets"], 1)
+        self.assertEqual(plan["capacity"]["unscheduled_markets"], 1)
+        self.assertEqual(plan["status"], "partial")
+        self.assertIn("not route optimization", plan["methodology"]["sequence_policy"])
+
+    def test_field_brief_is_auditable_preview_not_fake_persistence(self):
+        plan = {
+            "trace_id": "plan-trace", "objective": "Verify safely.",
+            "methodology": {"id": "storm-signal-field-plan-v1"},
+            "evidence_window": {"start_at": "2026-07-18T00:00:00Z", "end_at": "2026-07-19T00:00:00Z"},
+            "working_window": {"start_at": "2026-07-20T12:00:00Z", "end_at": "2026-07-20T14:00:00Z"},
+            "assignments": [{"sequence": 1, "market": "Austin", "rank": 1, "decision": "prioritize", "priority_score": 82, "support_level": "strong", "team": "Crew A", "scheduled": True, "starts_at": "2026-07-20T12:00:00Z", "ends_at": "2026-07-20T13:30:00Z", "location": {"latitude": 30.2672, "longitude": -97.7431}}],
+            "field_signals": {"continue": ["Safe and supported."], "change": [], "stop": ["Unsafe."]},
+            "crew_checklist": ["Confirm safety."], "limitations": ["Not proof of damage."],
+        }
+        brief = StormSignalTools(FakeDatabase()).call("prepare_field_brief", {"title": "Austin field brief", "field_plan": plan})
+        self.assertEqual(brief["status"], "preview_ready")
+        self.assertEqual(brief["artifact"]["methodology"]["id"], "storm-signal-field-brief-v1")
+        self.assertEqual(len(brief["artifact"]["content_hash"]), 64)
+        self.assertIn("# Austin field brief", brief["exports"]["markdown"]["content"])
+        self.assertTrue(brief["exports"]["priority_areas_csv"]["content"].startswith("sequence,market"))
+        self.assertEqual(brief["exports"]["pdf"]["status"], "not_available")
+        self.assertEqual(brief["persistence"]["status"], "not_persisted")
 
 
 if __name__ == "__main__":

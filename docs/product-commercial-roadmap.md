@@ -52,7 +52,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 - Observed SPC hail, wind and tornado reports.
 - NWS severe-thunderstorm and tornado warning evidence.
 - Historical NOAA Storm Events hail evidence.
-- Six read-only MCP tools: `search_storm_events`, `get_storm_event`, `assess_location`, `summarize_storm_activity`, `search_tropical_cyclones`, and `rank_markets`.
+- Eight read-only MCP tools: `search_storm_events`, `get_storm_event`, `assess_location`, `summarize_storm_activity`, `search_tropical_cyclones`, `rank_markets`, `build_field_plan`, and `prepare_field_brief`.
 - Census/PostGIS state, county, place and ZCTA enrichment.
 - Audited Census/PostGIS coverage for the controlled demo: Texas, Florida, Louisiana, Georgia, and North Carolina.
 - National NWS/SPC ingestion with commercial MCP answers limited to those five states and the latest 14 days.
@@ -63,8 +63,8 @@ The LLM manages conversation, refinement and explanation. Deterministic services
 
 - **Find the signal:** operational for current severe-event types and versioned NHC tropical-cyclone evidence within the five-state controlled-demo geography.
 - **Rank the markets:** operational through the versioned [`market-ranking-contract.md`](market-ranking-contract.md), with explicit candidate coordinates, multihazard support, operating-base proximity and `prioritize`/`monitor`/`insufficient_evidence` outputs.
-- **Build the field plan:** conversational design is defined; structured plan entities and generation are not yet implemented.
-- **Share the brief:** templates and output requirements are defined; production document generation and workspace persistence are not yet implemented.
+- **Build the field plan:** deterministic structured previews are operational through [`field-plan-and-brief-contract.md`](field-plan-and-brief-contract.md), including rank-preserving crew assignments, capacity, field checks and decision-change signals.
+- **Share the brief:** structured, Markdown and priority-area CSV previews are operational. PDF rendering, tenant persistence and revocable sharing remain pending the authenticated artifact layer.
 
 ## One ordered delivery plan
 
@@ -131,21 +131,21 @@ Outputs must be `prioritize`, `monitor`, or `insufficient_evidence`, with compon
 
 Commercial outcome delivered: **Rank the markets**.
 
-### Stage 4 — Field planning V1
+### Stage 4 — Field planning V1 — preview engine completed July 19, 2026
 
-Introduce structured organization inputs: operating base, travel limit, available teams, working window and selected territories. Generate a validated plan with assignments, sequence, timing, rationale and field checks. Advanced route optimization remains outside V1.
+Structured inputs now include operating base, available teams, working window and selected territories. The MCP generates a validated preview with assignments, sequence, timing, rationale, capacity and field checks. Advanced route optimization and travel-time estimation remain outside V1.
 
 Commercial outcome delivered: **Build the field plan**.
 
-### Stage 5 — Deliverables V1
+### Stage 5 — Deliverables V1 — preview layer completed July 19, 2026
 
-Persist an evidence snapshot and generate controlled templates for:
+The public MCP now previews structured content, Markdown, and Priority Areas CSV with a content hash. The authenticated artifact layer must still persist the evidence snapshot and render controlled templates for:
 
 - Field Brief PDF;
 - Deployment Plan PDF;
 - Priority Areas Excel or CSV.
 
-The user previews the structured content before generation. Every artifact records its source evidence, generated time, timezone, methodology version and limitations.
+The preview records source methodology, generated time, timezone and limitations. Durable artifacts, Field Brief PDF, Deployment Plan PDF, tenant access control, retention and revocable sharing are not yet implemented and must not be inferred from the preview tool.
 
 Commercial outcome delivered: **Share the brief**.
 
