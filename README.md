@@ -4,6 +4,8 @@ This proof of concept ingests, normalizes, persists, and serves evidence from th
 
 It also includes a remote MCP server that exposes the persisted evidence through four read-only tools: `search_storm_events`, `get_storm_event`, `assess_location`, and `summarize_storm_activity`.
 
+Product promise, frozen commercial outcomes, delivery order, and Gulf Coast expansion are governed by [the product and commercial roadmap](docs/product-commercial-roadmap.md).
+
 ## Run it
 
 Requires Python 3.11+ and outbound HTTPS access; there are no runtime dependencies.
@@ -113,14 +115,15 @@ All normalized geometry should use PostGIS SRID 4326. Preserve source geometry u
 
 The next product increment is the versioned Census boundary and territorial enrichment layer documented in [`docs/geospatial-enrichment-plan.md`](docs/geospatial-enrichment-plan.md) and frozen through [`docs/geospatial-data-contract.md`](docs/geospatial-data-contract.md). It will map event points and polygons to counties, Census places, and ZCTAs while preserving the difference between observed points, warning areas, and approximate ZIP areas.
 
-Run the frozen Montana validation import after applying migrations (requires GDAL's `ogr2ogr` and the linked Supabase CLI):
+Run one state import after applying migrations (requires GDAL's `ogr2ogr` and the linked Supabase CLI). Montana remains the default; subsequent states use their two-digit Census FIPS code:
 
 ```bash
 supabase db push
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python3 scripts/import_census_geographies.py --apply
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python3 scripts/import_census_geographies.py --state-fips 48 --apply  # Texas
 ```
 
-The importer uses TIGER/Line 2025 archives for state, county, and place boundaries. For the national 529 MB ZCTA layer, the pilot obtains complete intersecting geometries through the official Census TIGERweb ACS 2025 layer instead of downloading the entire country.
+The importer uses TIGER/Line 2025 archives for state, county, and place boundaries. For the national 529 MB ZCTA layer, it derives the selected state's envelope from its Census geometry and obtains complete intersecting ZCTA geometries through the official Census TIGERweb ACS 2025 layer instead of downloading the entire country.
 
 ## Proposed normalized model
 

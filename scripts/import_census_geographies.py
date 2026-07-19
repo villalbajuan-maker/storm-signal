@@ -16,10 +16,9 @@ from typing import Any
 
 USER_AGENT = "storm-signal-census-importer/0.1 (https://vectoros.co)"
 VINTAGE = 2025
-MONTANA_FIPS = "30"
-MONTANA_BBOX = "-116.2,44.2,-103.9,49.1"
 TIGER_ROOT = "https://www2.census.gov/geo/tiger/TIGER2025"
 ZCTA_ENDPOINT = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/PUMA_TAD_TAZ_UGA_ZCTA/MapServer/4/query"
+STATE_ABBREVIATIONS = {"12": "FL", "13": "GA", "30": "MT", "37": "NC", "48": "TX"}
 
 
 @dataclass(frozen=True)
@@ -70,10 +69,28 @@ def archive_artifact(area_type: str, url: str, where: str | None, work: Path) ->
     return Artifact(area_type, url, sha256(body), json.loads(output.read_text()))
 
 
-def zcta_artifact() -> Artifact:
-    xmin, ymin, xmax, ymax = MONTANA_BBOX.split(",")
+def geometry_bbox(collection: dict[str, Any], padding: float = 0.1) -> tuple[float, float, float, float]:
+    positions: list[tuple[float, float]] = []
+
+    def visit(value: Any) -> None:
+        if isinstance(value, list) and len(value) >= 2 and all(isinstance(item, (int, float)) for item in value[:2]):
+            positions.append((float(value[0]), float(value[1])))
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+
+    for feature in collection.get("features", []):
+        visit((feature.get("geometry") or {}).get("coordinates"))
+    if not positions:
+        raise ValueError("cannot derive a bounding box from an empty state geometry")
+    xs, ys = zip(*positions)
+    return min(xs) - padding, min(ys) - padding, max(xs) + padding, max(ys) + padding
+
+
+def zcta_artifact(bbox: tuple[float, float, float, float]) -> Artifact:
+    xmin, ymin, xmax, ymax = bbox
     envelope = json.dumps({
-        "xmin": float(xmin), "ymin": float(ymin), "xmax": float(xmax), "ymax": float(ymax),
+        "xmin": xmin, "ymin": ymin, "xmax": xmax, "ymax": ymax,
         "spatialReference": {"wkid": 4326},
     }, separators=(",", ":"))
     id_parameters = {
@@ -195,39 +212,49 @@ def apply_sql_batched(sql: str, work: Path, prefix: str, max_chars: int = 800_00
         subprocess.run(["supabase", "db", "query", "--linked", "-f", str(path)], check=True)
 
 
-def collect(work: Path, layers: set[str]) -> list[Artifact]:
+def collect(work: Path, layers: set[str], state_fips: str) -> list[Artifact]:
+    state = archive_artifact(
+        "state", f"{TIGER_ROOT}/STATE/tl_2025_us_state.zip", f"STATEFP = '{state_fips}'", work
+    )
+    if not state.feature_collection.get("features"):
+        raise ValueError(f"no Census state found for FIPS {state_fips}")
     collectors = {
-        "state": lambda: archive_artifact("state", f"{TIGER_ROOT}/STATE/tl_2025_us_state.zip", "STATEFP = '30'", work),
-        "county": lambda: archive_artifact("county", f"{TIGER_ROOT}/COUNTY/tl_2025_us_county.zip", "STATEFP = '30'", work),
-        "place": lambda: archive_artifact("place", f"{TIGER_ROOT}/PLACE/tl_2025_30_place.zip", None, work),
-        "zcta": zcta_artifact,
+        "state": lambda: state,
+        "county": lambda: archive_artifact("county", f"{TIGER_ROOT}/COUNTY/tl_2025_us_county.zip", f"STATEFP = '{state_fips}'", work),
+        "place": lambda: archive_artifact("place", f"{TIGER_ROOT}/PLACE/tl_2025_{state_fips}_place.zip", None, work),
+        "zcta": lambda: zcta_artifact(geometry_bbox(state.feature_collection)),
     }
     return [collectors[layer]() for layer in ("state", "county", "place", "zcta") if layer in layers]
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Import the frozen Census/PostGIS Montana validation slice")
+    parser = argparse.ArgumentParser(description="Import Census/PostGIS geography for one state")
     parser.add_argument("--apply", action="store_true", help="apply generated SQL to the linked Supabase project")
     parser.add_argument("--output", type=Path, help="retain the generated SQL at this path")
     parser.add_argument("--layers", default="state,county,place,zcta", help="comma-separated subset of state,county,place,zcta")
+    parser.add_argument("--state-fips", default="30", help="two-digit Census state FIPS code (default: 30, Montana)")
     args = parser.parse_args()
+    state_fips = args.state_fips.strip().zfill(2)
+    if len(state_fips) != 2 or not state_fips.isdigit():
+        parser.error("--state-fips must be a two-digit numeric Census state FIPS code")
     layers = {value.strip() for value in args.layers.split(",") if value.strip()}
     unknown = layers - {"state", "county", "place", "zcta"}
     if not layers or unknown:
         parser.error(f"invalid layers: {sorted(unknown)}")
     with tempfile.TemporaryDirectory(prefix="storm-signal-census-") as temp:
         work = Path(temp)
-        artifacts = collect(work, layers)
+        artifacts = collect(work, layers, state_fips)
         parts, summary = [], []
+        scope = STATE_ABBREVIATIONS.get(state_fips, f"state_fips:{state_fips}")
         for artifact in artifacts:
-            sql, loaded, rejected = artifact_sql(artifact)
+            sql, loaded, rejected = artifact_sql(artifact, scope=scope)
             parts.append(sql)
             summary.append({"area_type": artifact.area_type, "loaded": loaded, "rejected": rejected, "source_sha256": artifact.source_sha256})
             if args.apply:
                 apply_sql_batched(sql, work, artifact.area_type)
-        sql_path = args.output or work / "montana_geographies.sql"
+        sql_path = args.output or work / f"state_{state_fips}_geographies.sql"
         sql_path.write_text("\n".join(parts))
-        print(json.dumps({"applied": args.apply, "layers": summary}, indent=2))
+        print(json.dumps({"applied": args.apply, "state_fips": state_fips, "scope": scope, "layers": summary}, indent=2))
     return 0
 
 
