@@ -76,6 +76,7 @@ The LLM manages conversation, refinement and explanation. Deterministic services
    - Georgia — geography imported and audited; no persisted Georgia events currently await enrichment.
    - North Carolina — geography imported, audited and applied to existing events.
    - Oklahoma — geography imported, audited and applied to existing events.
+   - Colorado — geography imported and audited; no persisted Colorado events currently await enrichment.
 2. Make new-event geographic enrichment automatic and observable.
 3. Allow MCP searches by derived county, place and ZCTA.
 4. Expose geographic coverage and gaps in `data_health`.

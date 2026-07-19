@@ -4,6 +4,9 @@ from scripts.import_census_geographies import STATE_ABBREVIATIONS, geometry_bbox
 
 
 class GeographicImportTests(unittest.TestCase):
+    def test_colorado_scope_uses_postal_abbreviation(self):
+        self.assertEqual(STATE_ABBREVIATIONS["08"], "CO")
+
     def test_louisiana_scope_uses_postal_abbreviation(self):
         self.assertEqual(STATE_ABBREVIATIONS["22"], "LA")
 
