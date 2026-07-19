@@ -58,6 +58,8 @@ order by started_at desc
 limit 20;
 ```
 
+Every MCP tool response also includes `data_health`: source freshness, the latest ingestion outcome, and current geographic/time coverage. This prevents an empty result from being presented as proof that no severe weather occurred when the relevant source is stale or has not been ingested.
+
 The GitHub Actions workflow in `.github/workflows/ingest.yml` remains available for manual recovery and the bounded Texas/Oklahoma historical refresh. It requires repository secrets named `SUPABASE_URL` and `SUPABASE_SECRET_KEY`.
 
 ## Run the MCP server

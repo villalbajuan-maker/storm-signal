@@ -118,6 +118,19 @@ class MCPToolTests(unittest.TestCase):
         self.assertEqual(len(result["evidence"]["historical_hail_events"]), 1)
         self.assertTrue(any("does not establish property damage" in item for item in result["limitations"]))
 
+    def test_tool_response_exposes_data_freshness_and_coverage(self):
+        health = {
+            "sources": [{"source": "spc_reports", "freshness_status": "fresh"}],
+            "coverage": {"states_with_recent_reports": 6},
+        }
+        tools = StormSignalTools(FakeDatabase({
+            "mcp_data_health": health,
+            "mcp_search_storm_events": [],
+        }))
+        result = tools.call("search_storm_events", {})
+        self.assertEqual(result["count"], 0)
+        self.assertEqual(result["data_health"], health)
+
 
 if __name__ == "__main__":
     unittest.main()

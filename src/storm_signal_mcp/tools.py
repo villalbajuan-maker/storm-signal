@@ -86,6 +86,7 @@ class StormSignalTools:
     def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         trace_id = str(uuid.uuid4())
         self._validate(name, arguments)
+        data_health = self.database.rpc("mcp_data_health", {})
         if name == "search_storm_events":
             data = self.database.rpc("mcp_search_storm_events", self._search_params(arguments))
             result = {"events": data or [], "count": len(data or []), "limitations": self._limitations()}
@@ -105,7 +106,12 @@ class StormSignalTools:
             result = self._assess(arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
-        return {"trace_id": trace_id, "generated_at": datetime.now(timezone.utc).isoformat(), **result}
+        return {
+            "trace_id": trace_id,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data_health": data_health,
+            **result,
+        }
 
     def _assess(self, a: dict[str, Any]) -> dict[str, Any]:
         radius = float(a.get("radius_miles", 10))

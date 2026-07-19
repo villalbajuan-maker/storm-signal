@@ -122,18 +122,19 @@ async function rpc(name: string, parameters: Record<string, unknown>): Promise<a
 async function callTool(name: string, a: Args) {
   validate(name, a)
   const trace_id = crypto.randomUUID(), generated_at = new Date().toISOString()
+  const data_health = await rpc("mcp_data_health", {})
   if (name === "search_storm_events") {
     const events = await rpc("mcp_search_storm_events", searchParams({ ...a, radius_miles: a.radius_miles ?? (a.latitude !== undefined ? 10 : null) })) ?? []
-    return { trace_id, generated_at, events, count: events.length, limitations: LIMITATIONS }
+    return { trace_id, generated_at, data_health, events, count: events.length, limitations: LIMITATIONS }
   }
   if (name === "get_storm_event") {
     const data = await rpc("mcp_get_storm_event", { p_event_id: a.event_id })
     if (!data) throw new Error("Storm event not found")
-    return { trace_id, generated_at, ...data, limitations: LIMITATIONS }
+    return { trace_id, generated_at, data_health, ...data, limitations: LIMITATIONS }
   }
   if (name === "summarize_storm_activity") {
     const groups = await rpc("mcp_summarize_storm_activity", { p_start_at: a.start_at, p_end_at: a.end_at, p_group_by: a.group_by ?? "event_type", p_state: a.state ?? null, p_event_types: a.event_types ?? null }) ?? []
-    return { trace_id, generated_at, groups, group_by: a.group_by ?? "event_type", limitations: LIMITATIONS }
+    return { trace_id, generated_at, data_health, groups, group_by: a.group_by ?? "event_type", limitations: LIMITATIONS }
   }
   const radius = Number(a.radius_miles ?? 10)
   const events = await rpc("mcp_search_storm_events", searchParams({ ...a, radius_miles: radius, limit: 200 })) ?? []
@@ -150,7 +151,7 @@ async function callTool(name: string, a: Args) {
   if (reports.some((e: any) => Number(e.magnitude) >= 1.5)) add(15, "reported hail at least 1.5 inches")
   score = Math.min(score, 100)
   return {
-    trace_id, generated_at,
+    trace_id, generated_at, data_health,
     location: { latitude: a.latitude, longitude: a.longitude, radius_miles: radius },
     window: { start_at: a.start_at, end_at: a.end_at }, score,
     classification: score >= 60 ? "strong" : score >= 25 ? "moderate" : "limited",
