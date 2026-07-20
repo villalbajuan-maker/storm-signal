@@ -14,6 +14,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  landing-light:
+    name: Landing Light build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: LandingLight
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: LandingLight/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build and run product tests
+        run: npm test
+
   code:
     name: Python and Deno contracts
     runs-on: ubuntu-latest

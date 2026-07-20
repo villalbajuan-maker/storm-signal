@@ -1,0 +1,13 @@
+.login-form-panel button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.login-error {
+  margin: 14px 0 -8px;
+  padding: 11px 13px;
+  background: #f8e3dc;
+  color: #8a301f;
+  font-size: 12px;
+  line-height: 1.45;
+}

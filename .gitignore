@@ -9,3 +9,15 @@ data/runs/
 backups/
 .supabase/
 supabase/.temp/
+
+# Local JavaScript/Next/Vercel state. Source configuration such as
+# LandingLight/.env.example and LandingLight/.openai/hosting.json stays tracked.
+.next/
+.vinext/
+.wrangler/
+.vercel/
+coverage/
+*.tsbuildinfo
+.DS_Store
+.env*
+!.env.example

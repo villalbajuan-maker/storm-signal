@@ -1,0 +1,21 @@
+.side-account form {
+  margin: 0;
+}
+
+.side-account .workspace-signout {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.58);
+  padding: 10px 12px 0;
+  text-align: left;
+  font: 650 9px/1.2 inherit;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.side-account .workspace-signout:hover {
+  color: rgba(255, 255, 255, 0.92);
+}

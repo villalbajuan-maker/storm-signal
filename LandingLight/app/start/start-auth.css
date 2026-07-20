@@ -1,0 +1,22 @@
+.start-panel button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.start-error {
+  margin: 14px 0 -8px;
+  padding: 11px 13px;
+  background: #f8e3dc;
+  color: #8a301f;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.start-notice {
+  margin: -12px 0 20px;
+  padding: 11px 13px;
+  background: #e7efe9;
+  color: #294f3e;
+  font-size: 12px;
+  line-height: 1.45;
+}
